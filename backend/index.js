@@ -19,8 +19,7 @@ app.use(cors());
 app.use(express.json()); // Crucial para recibir datos de Thunder Client
 
 // 5. Conectar rutas
-app.use('/auth', authRoutes); 
-
+app.use('/api/auth', authRoutes);
 // Ruta de prueba
 app.get('/', (req, res) => {
     res.send('¡El servidor de FamilyHub está funcionando correctamente!');
@@ -29,5 +28,5 @@ app.get('/', (req, res) => {
 // 6. Encender servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor listo en http://localhost:${PORT}`);
+    console.log(`🚀 Servidor listo en http://localhost:3000`);
 });
