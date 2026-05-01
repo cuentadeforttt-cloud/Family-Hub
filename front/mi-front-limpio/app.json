@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "mi-front-limpio",
-    "slug": "mi-front-limpio",
+    "name": "familyhub",
+    "slug": "familyhub",
+    "scheme": "familyhub",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

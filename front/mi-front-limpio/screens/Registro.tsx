@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert } from 'react-native';
-import { api } from '../services/api';
-
+import * as Linking from 'expo-linking';
+import { supabase } from '../supabase/index'
 export const P01Registro = ({ navigation }: any) => {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
@@ -12,18 +12,37 @@ export const P01Registro = ({ navigation }: any) => {
       Alert.alert('Atención', 'Completá todos los campos');
       return;
     }
+
     try {
-      const response = await api.post('/auth/signup', {
-        nombre,
+      // Creamos la URL dinámica para que el correo te redirija a la app
+      const redirectUrl = Linking.createURL('/login');
+
+      // Le pegamos directo a Supabase
+      const { data, error } = await supabase.auth.signUp({
         email: email.toLowerCase().trim(),
-        password
+        password,
+        options: {
+          data: {
+            nombre: nombre, // Guardamos el nombre en los metadatos del usuario
+          },
+          emailRedirectTo: redirectUrl,
+        },
       });
-      if (response.status === 201) {
-        // Pasa a la siguiente pantalla
-        navigation.navigate('P02CrearGrupo');
+
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
       }
+
+      // Si el registro fue exitoso (y si tenés la confirmación de email activada)
+      Alert.alert(
+        '¡Casi listo!',
+        'Revisá tu correo para confirmar la cuenta.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Login') }] // O a la pantalla que prefieras
+      );
+
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.mensaje || 'Error en el registro');
+      Alert.alert('Error', 'Hubo un problema inesperado en el registro');
     }
   };
 

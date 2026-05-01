@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert } from 'react-native';
-import { api } from '../services/api';
-
+import { supabase } from '../supabase/index';
 export const LoginScreen = ({ navigation }: any) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,20 +12,31 @@ export const LoginScreen = ({ navigation }: any) => {
     }
 
     try {
-      console.log('Iniciando sesión en Node...');
-      const response = await api.post('/auth/login', {
-        email: email.toLowerCase().trim(),
-        password: password
+      console.log('Iniciando sesión directamente en Supabase...');
+
+      // Limpiamos el email de espacios y mayúsculas para evitar errores de credenciales
+      const cleanEmail = email.toLowerCase().trim();
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: password,
       });
 
-      if (response.status === 200) {
-        Alert.alert('¡Bienvenido!', 'Sesión iniciada correctamente');
-        console.log(response.data);
-        // Aquí podrías navegar a la Home o al dashboard una vez logueado
+      if (error) {
+        // Supabase nos dirá si la cuenta no existe o la clave es incorrecta
+        Alert.alert('Error', error.message);
+        return;
       }
+
+      if (data.session) {
+        Alert.alert('¡Bienvenido!', 'Sesión iniciada correctamente');
+        // Una vez logueado, navegamos a la siguiente pantalla del flujo
+        navigation.navigate('P02CrearGrupo');
+      }
+
     } catch (error: any) {
       console.error(error);
-      Alert.alert('Error', error.response?.data?.mensaje || 'Credenciales incorrectas');
+      Alert.alert('Error', 'Ocurrió un problema inesperado al intentar entrar');
     }
   };
 
@@ -41,32 +51,32 @@ export const LoginScreen = ({ navigation }: any) => {
 
         <View style={styles.form}>
           <Text style={styles.label}>Email</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="tu@email.com" 
-            placeholderTextColor="#A3A3A3" 
-            keyboardType="email-address" 
-            autoCapitalize="none" 
-            value={email} 
-            onChangeText={setEmail} 
+          <TextInput
+            style={styles.input}
+            placeholder="tu@email.com"
+            placeholderTextColor="#A3A3A3"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
           />
 
           <Text style={styles.label}>Contraseña</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="Tu contraseña" 
-            placeholderTextColor="#A3A3A3" 
-            secureTextEntry 
-            value={password} 
-            onChangeText={setPassword} 
+          <TextInput
+            style={styles.input}
+            placeholder="Tu contraseña"
+            placeholderTextColor="#A3A3A3"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
           />
 
           <TouchableOpacity style={styles.primaryButton} onPress={handleLogin}>
             <Text style={styles.primaryButtonText}>Iniciar Sesión</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.linkButton} 
+          <TouchableOpacity
+            style={styles.linkButton}
             onPress={() => navigation.navigate('P01Registro')}
           >
             <Text style={styles.linkText}>¿No tenés cuenta? Registrate acá</Text>
@@ -79,7 +89,7 @@ export const LoginScreen = ({ navigation }: any) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F9F8F4' }, // Color crema de fondo
+  container: { flex: 1, backgroundColor: '#F9F8F4' },
   content: { flex: 1, paddingHorizontal: 24, justifyContent: 'center' },
   header: { alignItems: 'center', marginBottom: 32 },
   icon: { fontSize: 60, marginBottom: 16 },
