@@ -1,85 +1,136 @@
-// Importamos el cliente de Supabase que configuraste en src/config/supabase.js
-const { supabase } = require('../config/supabase.js');
+const { supabase, supabaseAdmin } = require('../config/supabase.js');
 
-/**
- * REGISTRO DE USUARIO (Sign Up)
- * Ideal para la primera pantalla de onboarding.
- */
+const normalizarEmail = (email) => String(email || '').toLowerCase().trim();
+
 const signUp = async (req, res) => {
   try {
-    // Extraemos los datos que envía el frontend (React Native)
     const { email, password, nombre } = req.body;
+    const emailNormalizado = normalizarEmail(email);
+    const nombreLimpio = String(nombre || '').trim();
 
-    // Validación básica
-    if (!email || !password) {
-      return res.status(400).json({ 
-        error: 'El email y la contraseña son obligatorios.' 
+    if (!emailNormalizado || !password) {
+      return res.status(400).json({
+        mensaje: 'El email y la contraseña son obligatorios.',
       });
     }
 
-    // Llamada a Supabase para crear el usuario
     const { data, error } = await supabase.auth.signUp({
-      email: email,
-      password: password,
+      email: emailNormalizado,
+      password,
       options: {
         data: {
-          // Guardamos el nombre en los metadatos del usuario para el perfil
-          nombre: nombre 
-        }
-      }
+          full_name: nombreLimpio,
+          nombre: nombreLimpio,
+        },
+      },
     });
 
-    // Si Supabase devuelve un error (ej. email ya registrado), lo lanzamos
     if (error) throw error;
 
-    // Respuesta exitosa
     return res.status(201).json({
       mensaje: 'Usuario registrado exitosamente. Revisa tu correo para verificar la cuenta.',
-      usuario: data.user
+      usuario: data.user,
     });
-
   } catch (error) {
     console.error('Error en signUp:', error);
-    return res.status(400).json({ error: error.message });
+    return res.status(400).json({ mensaje: error.message });
   }
 };
 
-/**
- * INICIO DE SESIÓN (Login)
- */
+const devSignUp = async (req, res) => {
+  try {
+    if (process.env.AUTH_DEV_BYPASS_EMAIL !== 'true') {
+      return res.status(403).json({
+        mensaje: 'El registro dev sin confirmación de email está deshabilitado.',
+      });
+    }
+
+    if (!supabaseAdmin) {
+      return res.status(500).json({
+        mensaje: 'Falta SUPABASE_SERVICE_ROLE_KEY en el .env del backend.',
+      });
+    }
+
+    const { email, password, nombre } = req.body;
+    const emailNormalizado = normalizarEmail(email);
+    const nombreLimpio = String(nombre || '').trim();
+
+    if (!nombreLimpio || !emailNormalizado || !password) {
+      return res.status(400).json({
+        mensaje: 'El nombre, email y contraseña son obligatorios.',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        mensaje: 'La contraseña debe tener al menos 6 caracteres.',
+      });
+    }
+
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
+      email: emailNormalizado,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        full_name: nombreLimpio,
+        nombre: nombreLimpio,
+      },
+    });
+
+    if (error) throw error;
+
+    return res.status(201).json({
+      mensaje: 'Usuario dev creado y confirmado exitosamente.',
+      usuario: data.user,
+    });
+  } catch (error) {
+    console.error('Error en devSignUp:', {
+      message: error.message,
+      status: error.status,
+      code: error.code,
+      name: error.name,
+    });
+
+    const mensaje = error.message?.toLowerCase() || '';
+    const status = mensaje.includes('already') || mensaje.includes('registered') ? 409 : 400;
+
+    return res.status(status).json({
+      mensaje: error.message || 'Error inesperado al registrar usuario dev.',
+    });
+  }
+};
+
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const emailNormalizado = normalizarEmail(email);
 
-    if (!email || !password) {
-      return res.status(400).json({ 
-        error: 'Por favor ingresa email y contraseña.' 
+    if (!emailNormalizado || !password) {
+      return res.status(400).json({
+        mensaje: 'Por favor ingresa email y contraseña.',
       });
     }
 
-    // Llamada a Supabase para iniciar sesión
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
+      email: emailNormalizado,
+      password,
     });
 
     if (error) throw error;
 
-    // Supabase devuelve la sesión (que contiene el Access Token) y los datos del usuario
     return res.status(200).json({
       mensaje: 'Inicio de sesión exitoso',
-      session: data.session, // Este token es el que React Native debe guardar
-      usuario: data.user
+      session: data.session,
+      usuario: data.user,
     });
-
   } catch (error) {
     console.error('Error en login:', error);
-    return res.status(401).json({ error: error.message });
+    return res.status(401).json({ mensaje: error.message });
   }
 };
 
-// Exportamos las funciones para usarlas en las rutas
 module.exports = {
   signUp,
-  login
+  devSignUp,
+  login,
 };

@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
-export const P02CrearGrupo = () => {
+type CrearGrupoProps = NativeStackScreenProps<RootStackParamList, 'P02CrearGrupo'>;
+
+export const P02CrearGrupo = ({ navigation }: CrearGrupoProps) => {
   const [nombreHogar, setNombreHogar] = useState('');
   const [tipoFamilia, setTipoFamilia] = useState('nucleo');
 
@@ -44,7 +49,7 @@ export const P02CrearGrupo = () => {
             {renderPill('separados', '🏘️', 'Separados')}
           </View>
 
-          <TouchableOpacity style={styles.primaryButton}>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate('Home')}>
             <Text style={styles.primaryButtonText}>Crear hogar</Text>
           </TouchableOpacity>
         </View>

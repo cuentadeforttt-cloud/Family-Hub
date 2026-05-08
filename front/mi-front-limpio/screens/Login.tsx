@@ -10,9 +10,13 @@ import {
   ScrollView 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import { api } from '../services/api';
 
-export const LoginScreen = ({ navigation }: any) => {
+type LoginScreenProps = NativeStackScreenProps<RootStackParamList, 'Login'>;
+
+export const LoginScreen = ({ navigation }: LoginScreenProps) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   // 1. EL NUEVO ESTADO DE ERRORES
@@ -45,7 +49,6 @@ export const LoginScreen = ({ navigation }: any) => {
 
     // Validaciones Backend
     try {
-      console.log('Iniciando sesión en Node...');
       const response = await api.post('/auth/login', {
         email: email.toLowerCase().trim(),
         password: password
@@ -53,7 +56,7 @@ export const LoginScreen = ({ navigation }: any) => {
 
       if (response.status === 200) {
         setErrores({ email: '', password: '', global: '' });
-        // navigation.navigate('Home'); 
+        navigation.navigate('Home');
       }
     } catch (error: any) {
       const statusCode = error.response?.status;
@@ -124,6 +127,13 @@ export const LoginScreen = ({ navigation }: any) => {
               />
               {errores.password ? <Text style={styles.fieldError}>{errores.password}</Text> : null}
 
+              <TouchableOpacity
+                style={styles.forgotButton}
+                onPress={() => navigation.navigate('ForgotPassword')}
+              >
+                <Text style={styles.forgotText}>Olvidé mi contraseña</Text>
+              </TouchableOpacity>
+
               {/* ERROR GLOBAL: Justo arriba del botón principal */}
               {errores.global ? <Text style={styles.globalError}>{errores.global}</Text> : null}
 
@@ -168,6 +178,8 @@ const styles = StyleSheet.create({
   
   primaryButton: { backgroundColor: '#CD7353', width: '100%', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginTop: 8 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  forgotButton: { alignItems: 'flex-end', marginBottom: 16 },
+  forgotText: { color: '#CD7353', fontSize: 14, fontWeight: '600' },
   linkButton: { marginTop: 24, alignItems: 'center' },
   linkText: { color: '#CD7353', fontSize: 14, fontWeight: '600' },
   screenIndicator: { fontSize: 10, color: '#A3A3A3', textAlign: 'center', marginTop: 'auto', paddingBottom: 24, letterSpacing: 1 },
