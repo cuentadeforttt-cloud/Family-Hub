@@ -23,6 +23,7 @@ expo-env.d.ts
 
 # debug
 npm-debug.*
+.npm-cache/
 yarn-debug.*
 yarn-error.*
 
@@ -31,6 +32,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript

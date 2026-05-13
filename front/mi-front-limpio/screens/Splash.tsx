@@ -1,7 +1,20 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView } from 'react-native';
+import {
+  ActivityIndicator,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { AuthStackParamList } from '../navigation/types';
 
-export const P00Splash = ({ navigation }: any) => {
+type Props = NativeStackScreenProps<AuthStackParamList, 'P00Splash'> & {
+  loading?: boolean;
+};
+
+export const P00Splash = ({ navigation, loading = false }: Props) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -11,14 +24,22 @@ export const P00Splash = ({ navigation }: any) => {
         
         <Text style={styles.title}>Tu hogar digital</Text>
         <Text style={styles.subtitle}>
-          Todo lo que tu familia necesita.{'\n'}En un solo lugar.
+          {loading
+            ? 'Estamos preparando tu sesion para que puedas continuar.'
+            : "Todo lo que tu familia necesita.\nEn un solo lugar."}
         </Text>
+        {loading ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator color="#CD7353" size="small" />
+            <Text style={styles.loaderText}>Cargando FamilyHub...</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.footer}>
         <TouchableOpacity 
           style={styles.primaryButton}
-          onPress={() => navigation.navigate('P01Registro')}
+          onPress={() => navigation?.navigate('P01Registro')}
         >
           <Text style={styles.primaryButtonText}>Crear mi familia</Text>
         </TouchableOpacity>
@@ -44,6 +65,8 @@ const styles = StyleSheet.create({
   icon: { fontSize: 80 },
   title: { fontSize: 28, fontWeight: '700', color: '#1C1C1C', marginBottom: 16 },
   subtitle: { fontSize: 15, color: '#6B6B6B', textAlign: 'center', lineHeight: 22 },
+  loaderContainer: { marginTop: 24, alignItems: 'center' },
+  loaderText: { marginTop: 12, fontSize: 13, color: '#6B6B6B' },
   footer: { paddingHorizontal: 24, paddingBottom: 40, alignItems: 'center' },
   primaryButton: { backgroundColor: '#CD7353', width: '100%', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 16 },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },

@@ -1,30 +1,33 @@
-import React, { useRef, useState } from 'react';
-import { Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Keyboard, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthScreenLayout } from '../components/AuthScreenLayout';
 import { AuthTextInput } from '../components/AuthTextInput';
 import { useAuth } from '../context/AuthContext';
-import type { RootStackParamList } from '../navigation/types';
+import type { AuthStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const LoginScreen = ({ navigation }: Props) => {
-  const { signIn } = useAuth();
-  const passwordInputRef = useRef<TextInput>(null);
+export const ForgotPasswordScreen = ({ navigation }: Props) => {
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const clearError = () => {
+  const clearMessages = () => {
     if (errorMessage) {
       setErrorMessage(null);
     }
+
+    if (successMessage) {
+      setSuccessMessage(null);
+    }
   };
 
-  const submitLogin = async () => {
+  const handleResetPassword = async () => {
     if (loading) {
       return;
     }
@@ -34,42 +37,41 @@ export const LoginScreen = ({ navigation }: Props) => {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail) {
-      setErrorMessage('Ingresa tu email para continuar.');
+      setSuccessMessage(null);
+      setErrorMessage('Ingresa tu email para recuperar la contrasena.');
       return;
     }
 
     if (!EMAIL_REGEX.test(trimmedEmail)) {
+      setSuccessMessage(null);
       setErrorMessage('Ingresa un email valido.');
-      return;
-    }
-
-    if (!password.trim()) {
-      setErrorMessage('Ingresa tu contrasena para continuar.');
       return;
     }
 
     setLoading(true);
     setErrorMessage(null);
+    setSuccessMessage(null);
 
-    const result = await signIn({
-      email: trimmedEmail,
-      password,
-    });
+    const result = await resetPassword(trimmedEmail);
 
     if (result.error) {
       setErrorMessage(result.error);
+    } else {
+      setSuccessMessage(
+        'Te enviamos un enlace para recuperar tu contrasena. Revisa tu correo.',
+      );
     }
 
     setLoading(false);
   };
 
   return (
-    <AuthScreenLayout screenIndicator="01 - LOGIN" centerContent>
+    <AuthScreenLayout screenIndicator="AUTH - RECOVERY" centerContent>
       <View style={styles.header}>
-        <Text style={styles.icon}>👋</Text>
-        <Text style={styles.title}>Hola de nuevo</Text>
+        <Text style={styles.icon}>🔐</Text>
+        <Text style={styles.title}>Recupera tu acceso</Text>
         <Text style={styles.subtitle}>
-          Ingresa tus credenciales para entrar a tu hogar.
+          Ingresa tu email y te enviaremos un enlace para crear una nueva contrasena.
         </Text>
       </View>
 
@@ -82,68 +84,39 @@ export const LoginScreen = ({ navigation }: Props) => {
           autoCorrect={false}
           autoComplete="email"
           textContentType="emailAddress"
-          returnKeyType="next"
-          blurOnSubmit={false}
+          returnKeyType="done"
           editable={!loading}
           value={email}
           onChangeText={(value) => {
-            clearError();
+            clearMessages();
             setEmail(value);
           }}
-          onSubmitEditing={() => passwordInputRef.current?.focus()}
-        />
-
-        <AuthTextInput
-          ref={passwordInputRef}
-          label="Contrasena"
-          placeholder="Tu contrasena"
-          isPasswordField
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="password"
-          textContentType="password"
-          returnKeyType="done"
-          editable={!loading}
-          value={password}
-          onChangeText={(value) => {
-            clearError();
-            setPassword(value);
-          }}
-          onSubmitEditing={() => void submitLogin()}
+          onSubmitEditing={() => void handleResetPassword()}
         />
 
         {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+        {successMessage ? <Text style={styles.successText}>{successMessage}</Text> : null}
 
         <TouchableOpacity
           style={[styles.primaryButton, loading && styles.buttonDisabled]}
-          onPress={() => void submitLogin()}
+          onPress={() => void handleResetPassword()}
           disabled={loading}
           accessibilityRole="button"
-          accessibilityLabel="Iniciar sesion"
+          accessibilityLabel="Enviar enlace de recuperacion"
         >
           <Text style={styles.primaryButtonText}>
-            {loading ? 'Ingresando...' : 'Iniciar sesion'}
+            {loading ? 'Enviando...' : 'Enviar enlace'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.forgotButton}
-          onPress={() => navigation.navigate('ForgotPassword')}
-          disabled={loading}
-          accessibilityRole="button"
-          accessibilityLabel="Recuperar contrasena"
-        >
-          <Text style={styles.forgotText}>Olvide mi contrasena</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
           style={styles.linkButton}
-          onPress={() => navigation.navigate('P01Registro')}
+          onPress={() => navigation.navigate('Login')}
           disabled={loading}
           accessibilityRole="button"
-          accessibilityLabel="Ir a registro"
+          accessibilityLabel="Volver al login"
         >
-          <Text style={styles.linkText}>No tienes cuenta? Registrate aca</Text>
+          <Text style={styles.linkText}>Volver a iniciar sesion</Text>
         </TouchableOpacity>
       </View>
     </AuthScreenLayout>
@@ -152,11 +125,12 @@ export const LoginScreen = ({ navigation }: Props) => {
 
 const styles = StyleSheet.create({
   header: { alignItems: 'center', marginBottom: 32 },
-  icon: { fontSize: 60, marginBottom: 16 },
+  icon: { fontSize: 58, marginBottom: 16 },
   title: { fontSize: 26, fontWeight: '700', color: '#1C1C1C', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#6B6B6B', textAlign: 'center' },
+  subtitle: { fontSize: 14, color: '#6B6B6B', textAlign: 'center', lineHeight: 22 },
   form: { width: '100%' },
   errorText: { color: '#B6472C', fontSize: 13, marginBottom: 12, lineHeight: 18 },
+  successText: { color: '#2F6E4F', fontSize: 13, marginBottom: 12, lineHeight: 18 },
   primaryButton: {
     backgroundColor: '#CD7353',
     width: '100%',
@@ -167,8 +141,6 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   buttonDisabled: { opacity: 0.6 },
-  forgotButton: { marginTop: 16, alignItems: 'center' },
-  forgotText: { color: '#6B6B6B', fontSize: 14, fontWeight: '500' },
   linkButton: { marginTop: 24, alignItems: 'center' },
   linkText: { color: '#CD7353', fontSize: 14, fontWeight: '600' },
 });
