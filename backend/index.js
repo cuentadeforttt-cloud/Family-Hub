@@ -9,6 +9,7 @@ const morgan = require('morgan');
 
 // 3. Importar tus rutas de la carpeta src
 const authRoutes = require('./src/routes/auth'); 
+const usersRoutes = require('./src/routes/users');
 
 const app = express();
 
@@ -20,6 +21,8 @@ app.use(express.json()); // Crucial para recibir datos de Thunder Client
 
 // 5. Conectar rutas
 app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/users', usersRoutes);
 // Ruta de prueba
 app.get('/', (req, res) => {
     res.send('¡El servidor de FamilyHub está funcionando correctamente!');
