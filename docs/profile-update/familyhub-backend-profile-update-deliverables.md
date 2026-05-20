@@ -18,7 +18,7 @@
 - `backend/src/middleware/multipartForm.js`
 - `backend/src/routes/users.js`
 - `backend/src/lib/sharp.js`
-- `docs/familyhub-backend-profile-update-storage-policies.sql`
+- `docs/profile-update/familyhub-backend-profile-update-storage-policies.sql`
 
 ## Endpoint implementado
 
@@ -50,7 +50,7 @@
 
 Archivo:
 
-- `docs/familyhub-backend-profile-update-storage-policies.sql`
+- `docs/profile-update/familyhub-backend-profile-update-storage-policies.sql`
 
 Incluye:
 
