@@ -2,6 +2,7 @@ import React from 'react';
 import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
 import { AuthProvider } from './context/AuthContext';
+import { HouseholdProvider } from './context/HouseholdContext';
 import { AppNavigator } from './navigation/AppNavigator';
 import type { RootStackParamList } from './navigation/types';
 
@@ -15,6 +16,9 @@ const linking: LinkingOptions<RootStackParamList> = {
       ForgotPassword: 'forgot-password',
       UpdatePassword: 'auth/callback',
       P02CrearGrupo: 'crear-grupo',
+      P03InvitarPersonas: 'invitar/:householdId',
+      HomeTabs: 'home',
+      JoinHousehold: 'join',
     },
   },
 };
@@ -22,9 +26,11 @@ const linking: LinkingOptions<RootStackParamList> = {
 export default function App() {
   return (
     <AuthProvider>
-      <NavigationContainer linking={linking}>
-        <AppNavigator />
-      </NavigationContainer>
+      <HouseholdProvider>
+        <NavigationContainer linking={linking}>
+          <AppNavigator />
+        </NavigationContainer>
+      </HouseholdProvider>
     </AuthProvider>
   );
 }

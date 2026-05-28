@@ -9,9 +9,12 @@ import React, {
 } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
 import { getAuthErrorMessage } from '../utils/authErrors';
+
+const PENDING_JOIN_KEY = 'pendingJoinToken';
 
 type AuthActionResult = {
   error: string | null;
@@ -38,6 +41,7 @@ export type AuthContextType = {
   loading: boolean;
   initialized: boolean;
   isPasswordRecovery: boolean;
+  pendingJoinToken: string | null;
   signIn: (params: SignInParams) => Promise<AuthActionResult>;
   signUp: (params: SignUpParams) => Promise<SignUpResult>;
   signOut: () => Promise<AuthActionResult>;
@@ -46,6 +50,7 @@ export type AuthContextType = {
   refreshSession: () => Promise<AuthActionResult>;
   handleIncomingUrl: (url: string) => Promise<AuthActionResult>;
   clearPasswordRecovery: () => void;
+  clearPendingJoinToken: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -77,6 +82,7 @@ const parseAuthUrl = (url: string) => {
 
   return {
     path: path ?? '',
+    queryParams: queryParams ?? {},
     accessToken,
     refreshToken,
     code,
@@ -93,6 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [pendingJoinToken, setPendingJoinToken] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
   const applySession = useCallback((nextSession: Session | null) => {
@@ -122,8 +129,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const handleIncomingUrl = useCallback(
     async (url: string): Promise<AuthActionResult> => {
-      const { accessToken, refreshToken, code, type, errorCode, errorDescription, hasAuthParams } =
+      const { path, accessToken, refreshToken, code, type, errorCode, errorDescription, hasAuthParams, queryParams } =
         parseAuthUrl(url);
+
+      // Handle invitation join link: familyhub://join?token=xxx
+      const joinToken = getFirstValue(queryParams?.token);
+      if ((path === 'join' || path === '/join') && joinToken) {
+        if (isMountedRef.current) setPendingJoinToken(joinToken);
+        await AsyncStorage.setItem(PENDING_JOIN_KEY, joinToken);
+        return { error: null };
+      }
 
       if (!hasAuthParams) {
         return { error: null };
@@ -227,6 +242,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         await refreshSession();
+
+        // Restore any pending join token that survived an app restart
+        const storedToken = await AsyncStorage.getItem(PENDING_JOIN_KEY);
+        if (storedToken && isMountedRef.current) {
+          setPendingJoinToken(storedToken);
+        }
       } finally {
         if (isMountedRef.current) {
           setLoading(false);
@@ -351,6 +372,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsPasswordRecovery(false);
   }, []);
 
+  const clearPendingJoinToken = useCallback(async () => {
+    setPendingJoinToken(null);
+    await AsyncStorage.removeItem(PENDING_JOIN_KEY);
+  }, []);
+
   const value = useMemo<AuthContextType>(
     () => ({
       session,
@@ -358,6 +384,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       loading,
       initialized,
       isPasswordRecovery,
+      pendingJoinToken,
       signIn,
       signUp,
       signOut,
@@ -366,13 +393,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       refreshSession,
       handleIncomingUrl,
       clearPasswordRecovery,
+      clearPendingJoinToken,
     }),
     [
       clearPasswordRecovery,
+      clearPendingJoinToken,
       handleIncomingUrl,
       initialized,
       isPasswordRecovery,
       loading,
+      pendingJoinToken,
       refreshSession,
       resetPassword,
       session,

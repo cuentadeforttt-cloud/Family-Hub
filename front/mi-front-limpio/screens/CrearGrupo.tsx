@@ -1,71 +1,76 @@
 import React, { useState } from 'react';
-import { Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+} from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthScreenLayout } from '../components/AuthScreenLayout';
 import { useAuth } from '../context/AuthContext';
+import { useHousehold } from '../context/HouseholdContext';
+import { createHousehold } from '../services/households';
+import type { PrivateStackParamList } from '../navigation/types';
 
-export const P02CrearGrupo = () => {
-  const { signOut, user } = useAuth();
+type Props = NativeStackScreenProps<PrivateStackParamList, 'P02CrearGrupo'>;
+
+type FamilyType = 'nucleo' | 'con_abuelos' | 'separados' | 'otro';
+
+const FAMILY_TYPES: { id: FamilyType; icon: string; label: string }[] = [
+  { id: 'nucleo',      icon: '👨‍👩‍👧‍👦', label: 'Núcleo' },
+  { id: 'con_abuelos', icon: '🏡',      label: 'Con abuelos' },
+  { id: 'separados',   icon: '🏘️',      label: 'Separados' },
+  { id: 'otro',        icon: '✨',       label: 'Otro' },
+];
+
+export const P02CrearGrupo = ({ navigation }: Props) => {
+  const { user, signOut } = useAuth();
+  const { reload } = useHousehold();
   const [nombreHogar, setNombreHogar] = useState('');
-  const [tipoFamilia, setTipoFamilia] = useState('nucleo');
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [loadingLogout, setLoadingLogout] = useState(false);
+  const [tipoFamilia, setTipoFamilia] = useState<FamilyType>('nucleo');
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const renderPill = (id: string, icon: string, label: string) => {
-    const isSelected = tipoFamilia === id;
-
-    return (
-      <TouchableOpacity
-        style={[styles.pill, isSelected && styles.pillSelected]}
-        onPress={() => setTipoFamilia(id)}
-      >
-        <Text style={styles.pillText}>
-          {icon} {label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
-  const handleCreatePlaceholder = () => {
+  const handleCreate = async () => {
     Keyboard.dismiss();
 
     if (!nombreHogar.trim()) {
-      setStatusMessage('Escribe un nombre para tu hogar antes de continuar.');
+      setErrorMessage('Escribe un nombre para tu hogar antes de continuar.');
       return;
     }
 
-    setStatusMessage(
-      'Tu hogar quedo listo como placeholder. En la siguiente fase conectamos esta pantalla a la base.',
-    );
+    if (!user) return;
+
+    setLoading(true);
+    setErrorMessage(null);
+
+    const { household, error } = await createHousehold(nombreHogar, tipoFamilia, user.id);
+
+    if (error || !household) {
+      setErrorMessage(error ?? 'Error inesperado. Intenta nuevamente.');
+      setLoading(false);
+      return;
+    }
+
+    await reload();
+
+    navigation.navigate('P03InvitarPersonas', { householdId: household.id });
+    setLoading(false);
   };
 
   const handleSignOut = async () => {
-    if (loadingLogout) {
-      return;
-    }
-
-    setLoadingLogout(true);
-    const result = await signOut();
-
-    if (result.error) {
-      setStatusMessage(result.error);
-    }
-
-    setLoadingLogout(false);
+    await signOut();
   };
 
   return (
     <AuthScreenLayout screenIndicator="02 - CREAR GRUPO">
       <View style={styles.topBar}>
-        <Text style={styles.userEmail}>{user?.email ?? 'Sesion activa'}</Text>
-        <TouchableOpacity
-          onPress={() => void handleSignOut()}
-          disabled={loadingLogout}
-          accessibilityRole="button"
-          accessibilityLabel="Cerrar sesion"
-        >
-          <Text style={styles.logoutText}>
-            {loadingLogout ? 'Cerrando...' : 'Cerrar sesion'}
-          </Text>
+        <Text style={styles.userEmail} numberOfLines={1}>{user?.email ?? ''}</Text>
+        <TouchableOpacity onPress={() => void handleSignOut()} accessibilityRole="button">
+          <Text style={styles.logoutText}>Cerrar sesión</Text>
         </TouchableOpacity>
       </View>
 
@@ -73,44 +78,50 @@ export const P02CrearGrupo = () => {
         <Text style={styles.icon}>🏠 ❤️</Text>
         <Text style={styles.title}>Nombra tu hogar</Text>
         <Text style={styles.subtitle}>
-          Este sera el espacio privado de tu familia.{'\n'}Solo las personas que invites
-          pueden entrar.
+          Este será el espacio privado de tu familia.{'\n'}Solo las personas que invites pueden entrar.
         </Text>
       </View>
 
       <View style={styles.form}>
         <TextInput
           style={styles.input}
-          placeholder="Familia Garcia"
+          placeholder="Familia García"
           placeholderTextColor="#A3A3A3"
           returnKeyType="done"
+          editable={!loading}
           value={nombreHogar}
-          onChangeText={(value) => {
-            if (statusMessage) {
-              setStatusMessage(null);
-            }
-            setNombreHogar(value);
-          }}
-          onSubmitEditing={handleCreatePlaceholder}
+          onChangeText={(v) => { setErrorMessage(null); setNombreHogar(v); }}
+          onSubmitEditing={() => void handleCreate()}
         />
 
-        <Text style={styles.label}>Que describe mejor a tu familia?</Text>
+        <Text style={styles.label}>¿Qué describe mejor a tu familia?</Text>
 
         <View style={styles.pillsContainer}>
-          {renderPill('nucleo', '👨‍👩‍👧‍👦', 'Nucleo')}
-          {renderPill('abuelos', '🏡', 'Con abuelos')}
-          {renderPill('separados', '🏘️', 'Separados')}
+          {FAMILY_TYPES.map(({ id, icon, label }) => (
+            <TouchableOpacity
+              key={id}
+              style={[styles.pill, tipoFamilia === id && styles.pillSelected]}
+              onPress={() => setTipoFamilia(id)}
+              disabled={loading}
+            >
+              <Text style={styles.pillText}>{icon} {label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
+        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
         <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={handleCreatePlaceholder}
+          style={[styles.primaryButton, loading && styles.buttonDisabled]}
+          onPress={() => void handleCreate()}
+          disabled={loading}
           accessibilityRole="button"
           accessibilityLabel="Crear hogar"
         >
-          <Text style={styles.primaryButtonText}>Crear hogar</Text>
+          {loading
+            ? <ActivityIndicator color="#FFFFFF" />
+            : <Text style={styles.primaryButtonText}>Crear hogar</Text>
+          }
         </TouchableOpacity>
       </View>
     </AuthScreenLayout>
@@ -118,12 +129,7 @@ export const P02CrearGrupo = () => {
 };
 
 const styles = StyleSheet.create({
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   userEmail: { fontSize: 12, color: '#6B6B6B', flex: 1, marginRight: 12 },
   logoutText: { color: '#CD7353', fontSize: 13, fontWeight: '600' },
   header: { alignItems: 'center', marginBottom: 32 },
@@ -153,13 +159,16 @@ const styles = StyleSheet.create({
   },
   pillSelected: { backgroundColor: '#F5E6DF', borderColor: '#CD7353' },
   pillText: { fontSize: 14, color: '#1C1C1C', fontWeight: '500' },
-  statusText: { color: '#6B6B6B', fontSize: 13, marginBottom: 16, lineHeight: 18 },
+  errorText: { color: '#B6472C', fontSize: 13, marginBottom: 16, lineHeight: 18 },
   primaryButton: {
     backgroundColor: '#CD7353',
     width: '100%',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  buttonDisabled: { opacity: 0.6 },
 });
