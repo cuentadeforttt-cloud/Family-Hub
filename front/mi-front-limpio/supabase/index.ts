@@ -2,6 +2,7 @@ import 'react-native-url-polyfill/auto'; // Parche necesario para que las URLs d
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, processLock } from '@supabase/supabase-js';
+import type { Database } from '../types/database';
 
 // En Expo, las variables del .env tienen que empezar sí o sí con EXPO_PUBLIC_
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL as string;
@@ -19,12 +20,24 @@ if (!supabaseAnonKey) {
   );
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    ...(Platform.OS !== 'web' ? { storage: AsyncStorage } : {}),
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-    lock: processLock,
-  },
-});
+const isNative = Platform.OS !== 'web';
+
+// Singleton persistente entre recargas de Metro HMR.
+// Sin esto, cada hot-reload crea un GoTrueClient nuevo sin sesión, mientras
+// el viejo conserva la sesión → requests REST usan el nuevo (sin JWT) → RLS 42501.
+const GLOBAL_KEY = '__familyhub_supabase_client__';
+const globalAny = global as Record<string, unknown>;
+
+if (!globalAny[GLOBAL_KEY]) {
+  globalAny[GLOBAL_KEY] = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      ...(isNative ? { storage: AsyncStorage } : {}),
+      ...(isNative ? { lock: processLock } : {}),
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+export const supabase = globalAny[GLOBAL_KEY] as ReturnType<typeof createClient<Database>>;

@@ -1,4 +1,5 @@
 import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
@@ -17,11 +18,43 @@ import { HomeTabNavigator } from './HomeTabNavigator';
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const PrivateStack = createNativeStackNavigator<PrivateStackParamList>();
 
+/** Pantalla de error cuando no se pudo cargar el hogar (error de DB/red) */
+const HouseholdErrorScreen = () => {
+  const { reload } = useHousehold();
+  return (
+    <View style={errStyles.container}>
+      <Text style={errStyles.icon}>⚠️</Text>
+      <Text style={errStyles.title}>No pudimos cargar tu hogar</Text>
+      <Text style={errStyles.subtitle}>
+        Puede ser un problema de conexión o de configuración.{'\n'}
+        Revisá tu conexión a internet e intentá de nuevo.
+      </Text>
+      <TouchableOpacity style={errStyles.btn} onPress={() => void reload()}>
+        <Text style={errStyles.btnText}>Reintentar</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const errStyles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#FAFAF8', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  icon:      { fontSize: 56, marginBottom: 16 },
+  title:     { fontSize: 22, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: 12 },
+  subtitle:  { fontSize: 15, color: '#6B6B6B', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
+  btn:       { backgroundColor: '#CD7353', paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12 },
+  btnText:   { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+});
+
 const PrivateNavigator = () => {
-  const { currentHousehold, loading } = useHousehold();
+  const { currentHousehold, loading, householdError } = useHousehold();
   const { pendingJoinToken } = useAuth();
 
   if (loading) return <AuthLoadingScreen />;
+
+  // Error real cargando el hogar (no es "sin hogar") — mostrar pantalla de reintento
+  if (householdError) {
+    return <HouseholdErrorScreen />;
+  }
 
   // Pending join token takes priority: process the invitation before anything else
   if (pendingJoinToken) {

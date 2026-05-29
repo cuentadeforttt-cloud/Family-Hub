@@ -8,10 +8,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
 import { getHouseholdTasks, completeTask as completeTaskService, type Task } from '../../services/tasks';
 import { getTodayEvents, type CalendarEvent } from '../../services/events';
+import type { PrivateStackParamList } from '../../navigation/types';
 
 const PRIORITY_COLORS = { alta: '#DC2626', media: '#F59E0B', baja: '#22C55E' } as const;
 
@@ -82,25 +85,27 @@ function DailyBriefing({ eventCount, taskCount }: { eventCount: number; taskCoun
   );
 }
 
-function QuickActions() {
-  const actions = [
-    { label: '+ Tarea',  color: 'transparent', border: '#CD7353' },
-    { label: '+ Evento', color: 'transparent', border: '#CD7353' },
-    { label: 'Invitar',  color: 'transparent', border: '#CD7353' },
-    { label: '🚨 SOS',  color: '#DC2626',      border: '#DC2626' },
-  ];
+function QuickActions({ householdId }: { householdId: string }) {
+  const navigation = useNavigation<NativeStackNavigationProp<PrivateStackParamList>>();
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsScroll}>
-      {actions.map(a => (
-        <TouchableOpacity
-          key={a.label}
-          style={[styles.actionPill, { backgroundColor: a.color, borderColor: a.border }, a.label === '🚨 SOS' && styles.sosBtn]}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.actionText, a.label === '🚨 SOS' && { color: '#FFFFFF' }]}>{a.label}</Text>
-        </TouchableOpacity>
-      ))}
+      <TouchableOpacity style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]} accessibilityRole="button">
+        <Text style={styles.actionText}>+ Tarea</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]} accessibilityRole="button">
+        <Text style={styles.actionText}>+ Evento</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]}
+        accessibilityRole="button"
+        onPress={() => navigation.navigate('P03InvitarPersonas', { householdId })}
+      >
+        <Text style={styles.actionText}>Invitar</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={[styles.actionPill, styles.sosBtn]} accessibilityRole="button">
+        <Text style={[styles.actionText, { color: '#FFFFFF' }]}>🚨 SOS</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -254,7 +259,7 @@ export const HomeCoordinador = () => {
 
         <FamilyPulse />
         <DailyBriefing eventCount={todayEvents.length} taskCount={pendingTasks.length} />
-        <QuickActions />
+        {currentHousehold && <QuickActions householdId={currentHousehold.id} />}
         <Timeline events={todayEvents} loading={dataLoading} />
         <View style={{ height: 20 }} />
         <PendingTasks tasks={pendingTasks} loading={dataLoading} onComplete={id => void handleCompleteTask(id)} />

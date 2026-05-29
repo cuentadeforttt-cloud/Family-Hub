@@ -70,44 +70,23 @@ export async function revokeInvitation(
 
 export async function joinHouseholdByToken(
   token: string,
-  userId: string,
+  _userId: string, // kept for API compatibility — server uses auth.uid() internally
 ): Promise<{ householdId: string | null; error: string | null }> {
-  // Fetch the invitation
-  const { data: inv, error: fetchError } = await supabase
-    .from('invitations')
-    .select('*')
-    .eq('token', token)
-    .is('used_at', null)
-    .single();
+  // Use a SECURITY DEFINER RPC so the invitee (who has no household yet) can
+  // read the invitation, insert themselves, and mark it as used atomically —
+  // without needing direct SELECT/UPDATE access on the invitations table.
+  const { data, error } = await supabase
+    .rpc('join_household_by_token', { p_token: token });
 
-  if (fetchError || !inv) {
-    return { householdId: null, error: 'La invitación no existe o ya fue usada.' };
-  }
-
-  if (new Date(inv.expires_at) < new Date()) {
-    return { householdId: null, error: 'Esta invitación expiró. Solicita una nueva al coordinador.' };
-  }
-
-  // Join the household
-  const { error: joinError } = await supabase.from('household_members').insert({
-    user_id: userId,
-    household_id: inv.household_id,
-    rol: inv.rol_asignado,
-    invited_by: inv.created_by,
-  });
-
-  if (joinError) {
-    if (joinError.code === '23505') {
-      return { householdId: null, error: 'Ya eres miembro de este hogar.' };
-    }
+  if (error) {
     return { householdId: null, error: 'No pudimos unirte al hogar. Intenta nuevamente.' };
   }
 
-  // Mark invitation as used (best-effort — done client-side; ideally a server RPC)
-  await supabase
-    .from('invitations')
-    .update({ used_at: new Date().toISOString(), used_by: userId })
-    .eq('id', inv.id);
+  const result = data as { household_id: string | null; rol: string | null; error: string | null };
 
-  return { householdId: inv.household_id, error: null };
+  if (result?.error) {
+    return { householdId: null, error: result.error };
+  }
+
+  return { householdId: result?.household_id ?? null, error: null };
 }
