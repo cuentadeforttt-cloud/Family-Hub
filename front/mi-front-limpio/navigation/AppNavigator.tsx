@@ -70,22 +70,19 @@ const PrivateNavigator = () => {
     );
   }
 
+  // Navigator aplanado: todos los screens siempre registrados.
+  // initialRouteName solo aplica en el primer mount; cambios posteriores de
+  // currentHousehold NO resetean el stack, permitiendo que navigate/replace
+  // post-creación permanezca en P03InvitarPersonas sin ser pisado.
   return (
-    <PrivateStack.Navigator screenOptions={{ headerShown: false }}>
-      {currentHousehold ? (
-        <>
-          <PrivateStack.Screen name="HomeTabs" component={HomeTabNavigator} />
-          <PrivateStack.Screen name="P03InvitarPersonas" component={P03InvitarPersonas} />
-          <PrivateStack.Screen name="JoinHousehold" component={JoinHouseholdScreen} />
-        </>
-      ) : (
-        <>
-          <PrivateStack.Screen name="P02CrearGrupo" component={P02CrearGrupo} />
-          <PrivateStack.Screen name="P03InvitarPersonas" component={P03InvitarPersonas} />
-          <PrivateStack.Screen name="HomeTabs" component={HomeTabNavigator} />
-          <PrivateStack.Screen name="JoinHousehold" component={JoinHouseholdScreen} />
-        </>
-      )}
+    <PrivateStack.Navigator
+      screenOptions={{ headerShown: false }}
+      initialRouteName={currentHousehold ? 'HomeTabs' : 'P02CrearGrupo'}
+    >
+      <PrivateStack.Screen name="HomeTabs" component={HomeTabNavigator} />
+      <PrivateStack.Screen name="P02CrearGrupo" component={P02CrearGrupo} />
+      <PrivateStack.Screen name="P03InvitarPersonas" component={P03InvitarPersonas} />
+      <PrivateStack.Screen name="JoinHousehold" component={JoinHouseholdScreen} />
     </PrivateStack.Navigator>
   );
 };

@@ -43,7 +43,7 @@ export async function getPendingInvitations(
     .eq('household_id', householdId)
     .is('used_at', null)
     .gt('expires_at', new Date().toISOString())
-    .order('created_at', { ascending: false });
+    .order('expires_at', { ascending: true });
 
   if (error) {
     return { invitations: [], error: 'No pudimos cargar las invitaciones.' };

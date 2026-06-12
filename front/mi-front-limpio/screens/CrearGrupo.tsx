@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Keyboard,
   StyleSheet,
@@ -28,11 +28,19 @@ const FAMILY_TYPES: { id: FamilyType; icon: string; label: string }[] = [
 
 export const P02CrearGrupo = ({ navigation }: Props) => {
   const { user, signOut } = useAuth();
-  const { reload } = useHousehold();
+  const { reload, currentHousehold } = useHousehold();
   const [nombreHogar, setNombreHogar] = useState('');
   const [tipoFamilia, setTipoFamilia] = useState<FamilyType>('nucleo');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Guard: si el contexto ya tiene un hogar (ej: reload post-creación o vuelta atrás),
+  // redirigir a HomeTabs para evitar creaciones duplicadas.
+  useEffect(() => {
+    if (currentHousehold) {
+      navigation.replace('HomeTabs');
+    }
+  }, [currentHousehold, navigation]);
 
   const handleCreate = async () => {
     Keyboard.dismiss();
@@ -55,9 +63,12 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
       return;
     }
 
-    await reload();
+    // replace() antes de reload(): navigator todavía montado, referencia válida.
+    // replace en vez de navigate: el botón Atrás no vuelve a esta pantalla.
+    navigation.replace('P03InvitarPersonas', { householdId: household.id });
 
-    navigation.navigate('P03InvitarPersonas', { householdId: household.id });
+    // reload en background: usa reloading (no loading), no desmonta el navigator.
+    void reload();
     setLoading(false);
   };
 

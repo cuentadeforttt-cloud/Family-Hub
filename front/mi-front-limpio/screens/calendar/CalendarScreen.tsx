@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Dimensions,
   Modal,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TouchableOpacity,
   View,
@@ -14,13 +16,57 @@ import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
 import { getHouseholdSchedules, upsertSchedule, deleteSchedule } from '../../services/schedules';
 import type { Schedule, ScheduleInput } from '../../services/schedules';
-import { getHouseholdEvents, type CalendarEvent } from '../../services/events';
+import {
+  getHouseholdEvents,
+  createEvent,
+  deleteEvent,
+  type CalendarEvent,
+} from '../../services/events';
 
-const DAYS_WEEK = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const SCREEN_W = Dimensions.get('window').width;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const DAY_LETTERS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
 function formatEventTime(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Returns the 1st of `month` in `year`. */
+function firstOfMonth(year: number, month: number): Date {
+  return new Date(year, month, 1);
+}
+
+/**
+ * Returns a 5-or-6-row × 7-col grid for the given month.
+ * Cells for padding days (outside the month) are `null`.
+ * Week starts on Monday.
+ */
+function buildMonthGrid(year: number, month: number): Array<Date | null> {
+  const first   = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const dow     = first.getDay(); // 0=Sun…6=Sat
+  const startPad = dow === 0 ? 6 : dow - 1; // empty cells before day 1
+
+  const cells: Array<Date | null> = [];
+  for (let i = 0; i < startPad; i++) cells.push(null);
+  for (let d = 1; d <= lastDay; d++) cells.push(new Date(year, month, d));
+  while (cells.length % 7 !== 0) cells.push(null); // pad to fill last row
+  return cells;
+}
+
+/** Combines a YYYY-MM-DD string with HH:MM and returns an ISO 8601 string. */
+function buildDateTime(dateStr: string, timeStr: string): string {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const [hours, minutes]   = timeStr.split(':').map(Number);
+  return new Date(year, month - 1, day, hours, minutes).toISOString();
+}
+
+function dateToYMD(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
 type DisplayEvent = {
@@ -28,6 +74,7 @@ type DisplayEvent = {
   member: string; color: string; conflict: boolean;
 };
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const CATEGORIES: Schedule['category'][] = ['trabajo','escuela','deporte','salud','familia','personal','otro'];
 const CATEGORY_ICONS: Record<Schedule['category'], string> = {
   trabajo: '💼', escuela: '📚', deporte: '⚽', salud: '💊', familia: '🏠', personal: '🎯', otro: '📌',
@@ -37,15 +84,13 @@ const RECURRENCE_LABELS: Record<Schedule['recurrence'], string> = {
   none: 'Sin repetir', daily: 'Diaria', weekly: 'Semanal', monthly: 'Mensual',
 };
 const PALETTE = ['#CD7353','#6B4FE8','#7C9E7A','#D4975A','#D4A853','#E57373','#64B5F6','#81C784'];
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Role theme ───────────────────────────────────────────────────────────────
 type RoleTheme = {
   bg: string; surface: string; text: string; textMuted: string;
   primary: string; border: string; amber: string;
   modalBg: string; modalInputBg: string;
-  fs: number;    // font size multiplier
-  touch: number; // min touch target height
+  fs: number; touch: number;
 };
 
 function getRoleTheme(role: string | null): RoleTheme {
@@ -68,18 +113,23 @@ function getRoleTheme(role: string | null): RoleTheme {
                modalBg: '#1C2128', modalInputBg: '#0D1117', fs: 1.0, touch: 44 };
   }
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
 type Tab = 'calendar' | 'routines';
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export const CalendarScreen = () => {
   const { user } = useAuth();
   const { currentHousehold, members, currentRole } = useHousehold();
-  const [activeTab, setActiveTab] = useState<Tab>('calendar');
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [modalVisible, setModalVisible] = useState(false);
+
+  const today = useMemo(() => new Date(), []);
+
+  const [activeTab, setActiveTab]           = useState<Tab>('calendar');
+  const [selectedDate, setSelectedDate]     = useState<Date>(today);
+  const [currentMonth, setCurrentMonth]     = useState<Date>(() => firstOfMonth(today.getFullYear(), today.getMonth()));
+  const [schedules, setSchedules]           = useState<Schedule[]>([]);
+  const [events, setEvents]                 = useState<CalendarEvent[]>([]);
+  const [modalVisible, setModalVisible]     = useState(false);
+  const [eventModalVisible, setEventModalVisible] = useState(false);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
   const T = useMemo(() => getRoleTheme(currentRole), [currentRole]);
@@ -90,16 +140,52 @@ export const CalendarScreen = () => {
   const routinesTabLabel = isAdultoMayor ? 'Recordatorios' : (isAdolescente ? 'Mi Agenda' : 'Rutinas');
   const f = (size: number) => Math.round(size * T.fs);
 
-  // Form state
-  const [formTitle, setFormTitle] = useState('');
-  const [formStart, setFormStart] = useState('08:00');
-  const [formEnd, setFormEnd] = useState('09:00');
-  const [formDays, setFormDays] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [formRecurrence, setFormRecurrence] = useState<Schedule['recurrence']>('weekly');
-  const [formCategory, setFormCategory] = useState<Schedule['category']>('trabajo');
-  const [formColor, setFormColor] = useState('#CD7353');
-  const [formSaving, setFormSaving] = useState(false);
+  // ── Month grid ──────────────────────────────────────────────────────────────
+  const monthGrid = useMemo(
+    () => buildMonthGrid(currentMonth.getFullYear(), currentMonth.getMonth()),
+    [currentMonth],
+  );
 
+  const monthLabel = useMemo(() => {
+    const raw = currentMonth.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }, [currentMonth]);
+
+  const prevMonth = () =>
+    setCurrentMonth(prev => firstOfMonth(prev.getFullYear(), prev.getMonth() - 1));
+  const nextMonth = () =>
+    setCurrentMonth(prev => firstOfMonth(prev.getFullYear(), prev.getMonth() + 1));
+
+  // Keep selected date inside current month when navigating
+  const handleSelectDate = (d: Date) => {
+    setSelectedDate(d);
+    // If the selected date is outside the current month view, move to that month
+    if (d.getMonth() !== currentMonth.getMonth() || d.getFullYear() !== currentMonth.getFullYear()) {
+      setCurrentMonth(firstOfMonth(d.getFullYear(), d.getMonth()));
+    }
+  };
+
+  // ── Schedule form ──────────────────────────────────────────────────────────
+  const [formTitle, setFormTitle]         = useState('');
+  const [formStart, setFormStart]         = useState('08:00');
+  const [formEnd, setFormEnd]             = useState('09:00');
+  const [formDays, setFormDays]           = useState<number[]>([1, 2, 3, 4, 5]);
+  const [formRecurrence, setFormRecurrence] = useState<Schedule['recurrence']>('weekly');
+  const [formCategory, setFormCategory]   = useState<Schedule['category']>('trabajo');
+  const [formColor, setFormColor]         = useState('#CD7353');
+  const [formSaving, setFormSaving]       = useState(false);
+
+  // ── Event form ────────────────────────────────────────────────────────────
+  const [evTitle, setEvTitle]       = useState('');
+  const [evDateStr, setEvDateStr]   = useState('');
+  const [evStart, setEvStart]       = useState('08:00');
+  const [evEnd, setEvEnd]           = useState('09:00');
+  const [evCategory, setEvCategory] = useState<CalendarEvent['category']>('personal');
+  const [evColor, setEvColor]       = useState('#CD7353');
+  const [evAllDay, setEvAllDay]     = useState(false);
+  const [evSaving, setEvSaving]     = useState(false);
+
+  // ── Data loading ──────────────────────────────────────────────────────────
   const loadSchedules = useCallback(async () => {
     if (!currentHousehold) return;
     const { schedules: s } = await getHouseholdSchedules(currentHousehold.id);
@@ -108,28 +194,24 @@ export const CalendarScreen = () => {
 
   useEffect(() => { void loadSchedules(); }, [loadSchedules]);
 
-  useEffect(() => {
+  const loadEvents = useCallback(async () => {
     if (!currentHousehold) return;
-    const now = new Date();
-    const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-    const to   = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
-    void getHouseholdEvents(currentHousehold.id, from, to).then(r => setEvents(r.events));
-  }, [currentHousehold]);
+    // Load the whole month so dots appear on all days
+    const from = firstOfMonth(currentMonth.getFullYear(), currentMonth.getMonth()).toISOString();
+    const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59, 999);
+    const { events: e } = await getHouseholdEvents(
+      currentHousehold.id,
+      from,
+      monthEnd.toISOString(),
+    );
+    setEvents(e);
+  }, [currentHousehold, currentMonth]);
 
-  const weekDates = useMemo(() => {
-    const today = new Date();
-    const dow = today.getDay();
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
-    return DAYS_WEEK.map((_, i) => {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      return d;
-    });
-  }, []);
+  useEffect(() => { void loadEvents(); }, [loadEvents]);
 
-  const dayEvents = useMemo<DisplayEvent[]>(() => {
-    return events
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const dayEvents = useMemo<DisplayEvent[]>(() =>
+    events
       .filter(e => new Date(e.start_at).toDateString() === selectedDate.toDateString())
       .map(e => ({
         id: e.id,
@@ -138,9 +220,40 @@ export const CalendarScreen = () => {
         member: '',
         color: e.color,
         conflict: false,
-      }));
-  }, [events, selectedDate]);
+      })),
+    [events, selectedDate]);
 
+  /** Map of dateString → event colors (max 3 dots) */
+  const eventDotMap = useMemo<Record<string, string[]>>(() => {
+    const map: Record<string, string[]> = {};
+    for (const e of events) {
+      const key = new Date(e.start_at).toDateString();
+      if (!map[key]) map[key] = [];
+      if (map[key].length < 3) map[key].push(e.color);
+    }
+    return map;
+  }, [events]);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const resetScheduleForm = () => {
+    setFormTitle(''); setFormStart('08:00'); setFormEnd('09:00');
+    setFormDays([1,2,3,4,5]); setFormRecurrence('weekly');
+    setFormCategory('trabajo'); setFormColor('#CD7353');
+  };
+
+  const openEventModal = () => {
+    setEvDateStr(dateToYMD(selectedDate));
+    setEvTitle(''); setEvStart('08:00'); setEvEnd('09:00');
+    setEvCategory('personal'); setEvColor('#CD7353'); setEvAllDay(false);
+    setEventModalVisible(true);
+  };
+
+  const toggleDay = (d: number) =>
+    setFormDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+
+  const memberSchedules = (userId: string) => schedules.filter(s => s.user_id === userId);
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
   const saveSchedule = async () => {
     if (!formTitle.trim() || !user || !currentHousehold) return;
     setFormSaving(true);
@@ -158,21 +271,49 @@ export const CalendarScreen = () => {
     };
     const { error } = await upsertSchedule(input);
     if (error) Alert.alert('Error', error);
-    else { await loadSchedules(); setModalVisible(false); resetForm(); }
+    else { await loadSchedules(); setModalVisible(false); resetScheduleForm(); }
     setFormSaving(false);
   };
 
-  const resetForm = () => {
-    setFormTitle(''); setFormStart('08:00'); setFormEnd('09:00');
-    setFormDays([1,2,3,4,5]); setFormRecurrence('weekly');
-    setFormCategory('trabajo'); setFormColor('#CD7353');
+  const saveEvent = async () => {
+    if (!evTitle.trim() || !user || !currentHousehold) return;
+    setEvSaving(true);
+    const start_at = evAllDay
+      ? buildDateTime(evDateStr, '00:00')
+      : buildDateTime(evDateStr, evStart);
+    const end_at = !evAllDay && evEnd ? buildDateTime(evDateStr, evEnd) : null;
+    const { error } = await createEvent({
+      household_id: currentHousehold.id,
+      created_by: user.id,
+      title: evTitle.trim(),
+      start_at, end_at,
+      category: evCategory,
+      color: evColor,
+      all_day: evAllDay,
+    });
+    if (error) Alert.alert('Error', error);
+    else { await loadEvents(); setEventModalVisible(false); }
+    setEvSaving(false);
   };
 
-  const toggleDay = (d: number) =>
-    setFormDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+  const handleDeleteEvent = (eventId: string) => {
+    Alert.alert('Eliminar evento', '¿Querés eliminar este evento?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive',
+        onPress: async () => {
+          const { error } = await deleteEvent(eventId);
+          if (error) Alert.alert('Error', error);
+          else setEvents(prev => prev.filter(e => e.id !== eventId));
+        },
+      },
+    ]);
+  };
 
-  const memberSchedules = (userId: string) => schedules.filter(s => s.user_id === userId);
+  // ── Day cell size (7 equal columns) ────────────────────────────────────────
+  const cellSize = Math.floor((SCREEN_W - 40) / 7); // 20px padding each side
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={S.safe} edges={['top']}>
       {/* Top tab bar */}
@@ -188,41 +329,66 @@ export const CalendarScreen = () => {
             </Text>
           </TouchableOpacity>
         ))}
+        {/* Add event shortcut */}
+        <TouchableOpacity style={S.tabAddBtn} onPress={openEventModal}>
+          <Text style={S.tabAddBtnText}>+</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={S.container} contentContainerStyle={S.content} showsVerticalScrollIndicator={false}>
         {activeTab === 'calendar' ? (
           <>
-            {/* Month header */}
+            {/* ── Month header ──────────────────────────────────────────── */}
             <View style={S.monthRow}>
-              <TouchableOpacity style={S.chevron}><Text style={S.chevronText}>‹</Text></TouchableOpacity>
-              <Text style={[S.monthLabel, { fontSize: f(18) }]}>Mayo 2025</Text>
-              <TouchableOpacity style={S.chevron}><Text style={S.chevronText}>›</Text></TouchableOpacity>
+              <TouchableOpacity style={S.chevron} onPress={prevMonth}>
+                <Text style={S.chevronText}>‹</Text>
+              </TouchableOpacity>
+              <Text style={[S.monthLabel, { fontSize: f(18) }]}>{monthLabel}</Text>
+              <TouchableOpacity style={S.chevron} onPress={nextMonth}>
+                <Text style={S.chevronText}>›</Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Week day selector */}
-            <View style={S.weekRow}>
-              {weekDates.map((wd, i) => {
-                const today = new Date();
-                const isToday = wd.toDateString() === today.toDateString();
-                const isSelected = wd.toDateString() === selectedDate.toDateString();
-                const dots = events
-                  .filter(e => new Date(e.start_at).toDateString() === wd.toDateString())
-                  .map(e => e.color)
-                  .slice(0, 3);
+            {/* ── Day-of-week header ────────────────────────────────────── */}
+            <View style={S.dowHeader}>
+              {DAY_LETTERS.map(l => (
+                <View key={l} style={[S.dowCell, { width: cellSize }]}>
+                  <Text style={S.dowText}>{l}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* ── Month grid ────────────────────────────────────────────── */}
+            <View style={S.gridContainer}>
+              {monthGrid.map((d, i) => {
+                if (!d) {
+                  return <View key={`empty-${i}`} style={[S.gridCell, { width: cellSize, height: cellSize + 8 }]} />;
+                }
+                const isToday    = d.toDateString() === today.toDateString();
+                const isSelected = d.toDateString() === selectedDate.toDateString();
+                const dots       = eventDotMap[d.toDateString()] ?? [];
+
                 return (
                   <TouchableOpacity
-                    key={DAYS_WEEK[i]}
-                    style={[S.dayCell, isSelected && S.dayCellSelected, { minHeight: T.touch }]}
-                    onPress={() => setSelectedDate(wd)}
+                    key={d.toISOString()}
+                    style={[
+                      S.gridCell,
+                      { width: cellSize, height: cellSize + 8 },
+                      isSelected && [S.gridCellSelected, { backgroundColor: T.primary }],
+                    ]}
+                    onPress={() => handleSelectDate(d)}
+                    activeOpacity={0.7}
                   >
-                    <Text style={[S.dayLetter, isSelected && S.dayLetterSelected]}>{DAYS_WEEK[i]}</Text>
-                    <Text style={[S.dayNumber, { fontSize: f(17) }, isSelected && S.dayNumberSelected, isToday && S.dayNumberToday]}>
-                      {wd.getDate()}
+                    <Text style={[
+                      S.gridCellNum, { fontSize: f(14) },
+                      isSelected && S.gridCellNumSelected,
+                      isToday && !isSelected && { color: T.primary, fontWeight: '800' },
+                    ]}>
+                      {d.getDate()}
                     </Text>
                     <View style={S.dotRow}>
                       {dots.map((c, j) => (
-                        <View key={j} style={[S.dot, { backgroundColor: c }]} />
+                        <View key={j} style={[S.dot, { backgroundColor: isSelected ? '#FFFFFF88' : c }]} />
                       ))}
                     </View>
                   </TouchableOpacity>
@@ -230,86 +396,87 @@ export const CalendarScreen = () => {
               })}
             </View>
 
-            {/* Member filter — hidden for adulto_mayor (simplify UX) */}
-            {!isAdultoMayor && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={S.filterScroll}>
-                <TouchableOpacity style={[S.filterPill, S.filterPillActive]}>
-                  <Text style={S.filterPillTextActive}>Todos</Text>
-                </TouchableOpacity>
-                {members.map(m => (
-                  <TouchableOpacity key={m.id} style={S.filterPill}>
-                    <Text style={S.filterPillText}>{m.user?.nombre?.split(' ')[0] ?? 'Miembro'}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            )}
+            {/* ── Selected day label + add button ──────────────────────── */}
+            <View style={S.dayTitleRow}>
+              <Text style={[S.dayTitle, { fontSize: f(15) }]} numberOfLines={1}>
+                {selectedDate.toLocaleDateString('es-AR', {
+                  weekday: 'long', day: 'numeric', month: 'long',
+                })}
+              </Text>
+              <TouchableOpacity style={[S.addEventBtn, { borderColor: T.primary }]} onPress={openEventModal}>
+                <Text style={[S.addEventBtnText, { fontSize: f(13), color: T.primary }]}>+ Evento</Text>
+              </TouchableOpacity>
+            </View>
 
-            {/* Day title */}
-            <Text style={[S.dayTitle, { fontSize: f(16) }]}>
-              {selectedDate.toLocaleDateString('es-AR', {
-                weekday: 'long', day: 'numeric', month: 'long',
-              })}
-            </Text>
-
-            {dayEvents.length === 0 && (
+            {/* ── Day events ────────────────────────────────────────────── */}
+            {dayEvents.length === 0 ? (
               <View style={S.emptyDay}>
-                <Text style={[S.emptyDayText, { fontSize: f(16) }]}>
-                  {isAdultoMayor ? '¡Hoy no tienes citas! Disfruta el día 🌞' : 'Sin eventos este día ✨'}
+                <Text style={[S.emptyDayText, { fontSize: f(15) }]}>
+                  {isAdultoMayor ? '¡No tienes citas este día! 🌞' : 'Sin eventos este día ✨'}
                 </Text>
               </View>
+            ) : (
+              dayEvents.map(ev => (
+                <View
+                  key={ev.id}
+                  style={[S.eventCard, { borderLeftColor: ev.color }]}
+                >
+                  {isAdultoMayor ? (
+                    <>
+                      <Text style={{ fontSize: f(24), fontWeight: '800', color: T.primary, marginRight: 14 }}>
+                        {ev.time}
+                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: f(17), fontWeight: '700', color: T.text }}>{ev.title}</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleDeleteEvent(ev.id)}
+                        style={{ padding: 8, minWidth: T.touch, alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Text style={{ fontSize: f(18), color: T.textMuted }}>✕</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <View style={S.eventLeft}>
+                        {isAdolescente && (
+                          <Text style={{ fontSize: 11, color: T.primary, fontWeight: '700', marginBottom: 2 }}>
+                            {ev.time}
+                          </Text>
+                        )}
+                        <Text style={[S.eventTitle, { fontSize: f(15) }]}>{ev.title}</Text>
+                        {!isAdolescente && (
+                          <Text style={[S.eventTime, { fontSize: f(12) }]}>{ev.time}</Text>
+                        )}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={[S.memberColorDot, { backgroundColor: ev.color }]} />
+                        <TouchableOpacity onPress={() => handleDeleteEvent(ev.id)}>
+                          <Text style={S.deleteBtn}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
+                </View>
+              ))
             )}
 
-            {dayEvents.map(ev => (
-              <View
-                key={ev.id}
-                style={[S.eventCard, { borderLeftColor: ev.color }, ev.conflict && S.eventCardConflict]}
-              >
-                {isAdultoMayor ? (
-                  // Large accessible event layout for elders
-                  <>
-                    <Text style={{ fontSize: f(26), fontWeight: '800', color: T.primary, marginRight: 16 }}>
-                      {ev.time}
-                    </Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: f(19), fontWeight: '700', color: T.text }}>{ev.title}</Text>
-                      <Text style={{ fontSize: f(14), color: T.textMuted, marginTop: 2 }}>{ev.member}</Text>
-                    </View>
-                  </>
-                ) : (
-                  // Standard event layout
-                  <>
-                    <View style={S.eventLeft}>
-                      {ev.conflict && <Text style={S.conflictBadge}>⚠️ Conflicto</Text>}
-                      {isAdolescente && (
-                        <Text style={{ fontSize: 12, color: T.primary, fontWeight: '700', marginBottom: 2 }}>
-                          {ev.time}
-                        </Text>
-                      )}
-                      <Text style={[S.eventTitle, { fontSize: f(15) }]}>{ev.title}</Text>
-                      <Text style={[S.eventMember, { fontSize: f(12) }]}>{ev.member}</Text>
-                    </View>
-                    <View style={[S.memberColorDot, { backgroundColor: ev.color }]} />
-                  </>
-                )}
-              </View>
-            ))}
-
-            {/* Free time card — hidden for adulto_mayor (too complex) */}
+            {/* ── Free time card (not for adulto_mayor) ────────────────── */}
             {!isAdultoMayor && (
               <View style={S.freeTimeCard}>
                 <Text style={S.freeTimeTitle}>✨ Tiempo libre en familia detectado</Text>
                 <Text style={S.freeTimeDesc}>El sábado de 14:00 a 17:00 todos están libres</Text>
-                <TouchableOpacity style={S.freeTimeBtn}>
+                <TouchableOpacity style={S.freeTimeBtn} onPress={openEventModal}>
                   <Text style={S.freeTimeBtnText}>+ Agregar plan familiar</Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* Large add button for adulto_mayor */}
+            {/* ── Adulto mayor: large add button ───────────────────────── */}
             {isAdultoMayor && (
               <TouchableOpacity
                 style={[S.elderAddBtn, { minHeight: T.touch + 10 }]}
-                onPress={() => { resetForm(); setModalVisible(true); }}
+                onPress={openEventModal}
               >
                 <Text style={[S.elderAddBtnText, { fontSize: f(17) }]}>+ Agregar cita o recordatorio</Text>
               </TouchableOpacity>
@@ -317,7 +484,7 @@ export const CalendarScreen = () => {
           </>
         ) : (
           <>
-            {/* Routines / Recordatorios tab */}
+            {/* ── Routines tab ──────────────────────────────────────────── */}
             <View style={S.routinesHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={[S.routinesTitle, { fontSize: f(20) }]}>
@@ -331,7 +498,7 @@ export const CalendarScreen = () => {
               </View>
               <TouchableOpacity
                 style={[S.addRoutineBtn, { minHeight: T.touch, justifyContent: 'center' }]}
-                onPress={() => { resetForm(); setModalVisible(true); }}
+                onPress={() => { resetScheduleForm(); setModalVisible(true); }}
               >
                 <Text style={[S.addRoutineBtnText, { fontSize: f(13) }]}>+ Agregar</Text>
               </TouchableOpacity>
@@ -383,7 +550,7 @@ export const CalendarScreen = () => {
                       {m.user_id === user?.id && (
                         <TouchableOpacity
                           style={[S.addForMemberBtn, { minHeight: T.touch }]}
-                          onPress={() => { resetForm(); setModalVisible(true); }}
+                          onPress={() => { resetScheduleForm(); setModalVisible(true); }}
                         >
                           <Text style={[S.addForMemberText, { fontSize: f(13) }]}>+ Agregar rutina</Text>
                         </TouchableOpacity>
@@ -407,10 +574,14 @@ export const CalendarScreen = () => {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* Add routine / reminder modal */}
+      {/* ── Add routine modal ───────────────────────────────────────────────── */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={S.modalOverlay}>
-          <ScrollView style={S.modalCard} contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            style={S.modalCard}
+            contentContainerStyle={{ paddingBottom: 32 }}
+            keyboardShouldPersistTaps="handled"
+          >
             <Text style={[S.modalTitle, { fontSize: f(20) }]}>
               {isAdultoMayor ? 'Nuevo recordatorio' : 'Nueva rutina'}
             </Text>
@@ -441,7 +612,7 @@ export const CalendarScreen = () => {
 
             <Text style={[S.modalLabel, { fontSize: f(12) }]}>Días</Text>
             <View style={S.dayToggles}>
-              {DAYS_WEEK.map((d, i) => (
+              {DAY_LETTERS.map((d, i) => (
                 <TouchableOpacity
                   key={d}
                   style={[
@@ -505,7 +676,7 @@ export const CalendarScreen = () => {
             <View style={S.modalActions}>
               <TouchableOpacity
                 style={[S.cancelBtn, { minHeight: T.touch }]}
-                onPress={() => { setModalVisible(false); resetForm(); }}
+                onPress={() => { setModalVisible(false); resetScheduleForm(); }}
               >
                 <Text style={[S.cancelBtnText, { fontSize: f(14) }]}>Cancelar</Text>
               </TouchableOpacity>
@@ -520,55 +691,191 @@ export const CalendarScreen = () => {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* ── Add event modal ─────────────────────────────────────────────────── */}
+      <Modal visible={eventModalVisible} transparent animationType="slide">
+        <View style={S.modalOverlay}>
+          <ScrollView
+            style={S.modalCard}
+            contentContainerStyle={{ paddingBottom: 32 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={[S.modalTitle, { fontSize: f(20) }]}>
+              {isAdultoMayor ? 'Nueva cita' : 'Nuevo evento'}
+            </Text>
+
+            <TextInput
+              style={[S.modalInput, { fontSize: f(15), minHeight: T.touch }]}
+              placeholder={isAdultoMayor ? 'Ej. Médico de cabecera' : 'Título del evento'}
+              placeholderTextColor={T.textMuted}
+              value={evTitle}
+              onChangeText={setEvTitle}
+            />
+
+            {/* All-day toggle */}
+            <View style={S.allDayRow}>
+              <Text style={[S.modalLabel, { fontSize: f(13), marginTop: 0, marginBottom: 0 }]}>Todo el día</Text>
+              <Switch
+                value={evAllDay}
+                onValueChange={setEvAllDay}
+                trackColor={{ false: T.border, true: T.primary }}
+                thumbColor={evAllDay ? '#FFFFFF' : T.textMuted}
+              />
+            </View>
+
+            {!evAllDay && (
+              <View style={[S.timeRow, { marginTop: 8 }]}>
+                <TextInput
+                  style={[S.modalInput, { flex: 1, fontSize: f(14), minHeight: T.touch }]}
+                  placeholder="Inicio 08:00"
+                  placeholderTextColor={T.textMuted}
+                  value={evStart}
+                  onChangeText={setEvStart}
+                />
+                <Text style={{ marginHorizontal: 8, color: T.textMuted, fontSize: f(14) }}>→</Text>
+                <TextInput
+                  style={[S.modalInput, { flex: 1, fontSize: f(14), minHeight: T.touch }]}
+                  placeholder="Fin 09:00"
+                  placeholderTextColor={T.textMuted}
+                  value={evEnd}
+                  onChangeText={setEvEnd}
+                />
+              </View>
+            )}
+
+            <Text style={[S.modalLabel, { fontSize: f(12) }]}>Categoría</Text>
+            <View style={S.categoryGrid}>
+              {CATEGORIES.map(c => (
+                <TouchableOpacity
+                  key={c}
+                  style={[S.categoryBtn, evCategory === c && S.categoryBtnActive, { minHeight: T.touch }]}
+                  onPress={() => setEvCategory(c)}
+                >
+                  <Text style={{ fontSize: f(20) }}>{CATEGORY_ICONS[c]}</Text>
+                  <Text style={[S.categoryBtnText, { fontSize: f(10) }]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={[S.modalLabel, { fontSize: f(12) }]}>Color</Text>
+            <View style={S.paletteRow}>
+              {PALETTE.map(col => (
+                <TouchableOpacity
+                  key={col}
+                  style={[
+                    S.colorDot,
+                    { backgroundColor: col, width: Math.round(28 * T.fs), height: Math.round(28 * T.fs), borderRadius: Math.round(14 * T.fs) },
+                    evColor === col && S.colorDotSelected,
+                  ]}
+                  onPress={() => setEvColor(col)}
+                />
+              ))}
+            </View>
+
+            <View style={S.modalActions}>
+              <TouchableOpacity
+                style={[S.cancelBtn, { minHeight: T.touch }]}
+                onPress={() => setEventModalVisible(false)}
+              >
+                <Text style={[S.cancelBtnText, { fontSize: f(14) }]}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[S.saveBtn, evSaving && { opacity: 0.6 }, { minHeight: T.touch }]}
+                onPress={() => void saveEvent()}
+                disabled={evSaving}
+              >
+                <Text style={[S.saveBtnText, { fontSize: f(15) }]}>{evSaving ? 'Guardando...' : 'Guardar'}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 function getStyles(T: RoleTheme) {
   return StyleSheet.create({
     safe: { flex: 1, backgroundColor: T.bg },
-    tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: T.border },
+
+    // Tab bar
+    tabBar: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: T.border, alignItems: 'center' },
     tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
     tabActive: { borderBottomWidth: 2, borderBottomColor: T.primary },
     tabText: { fontSize: 15, color: T.textMuted, fontWeight: '600' },
     tabTextActive: { color: T.text, fontWeight: '700' },
+    tabAddBtn: {
+      width: 36, height: 36, borderRadius: 18,
+      backgroundColor: T.primary,
+      alignItems: 'center', justifyContent: 'center',
+      marginRight: 12,
+    },
+    tabAddBtnText: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', lineHeight: 26 },
+
     container: { flex: 1, backgroundColor: T.bg },
     content: { paddingHorizontal: 20, paddingBottom: 24, paddingTop: 16 },
 
-    // Calendar tab
-    monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16, gap: 16 },
-    monthLabel: { fontSize: 18, fontWeight: '700', color: T.text },
+    // Month header
+    monthRow: {
+      flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'center', marginBottom: 14, gap: 16,
+    },
+    monthLabel: { fontSize: 18, fontWeight: '700', color: T.text, textTransform: 'capitalize', minWidth: 180, textAlign: 'center' },
     chevron: { padding: 8 },
-    chevronText: { fontSize: 22, color: T.primary },
-    weekRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-    dayCell: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 6, borderRadius: 12 },
-    dayCellSelected: { backgroundColor: T.primary },
-    dayLetter: { fontSize: 11, color: T.textMuted, fontWeight: '600', marginBottom: 2 },
-    dayLetterSelected: { color: '#FFF' },
-    dayNumber: { fontSize: 18, fontWeight: '700', color: T.text, marginBottom: 4 },
-    dayNumberSelected: { color: '#FFF' },
-    dayNumberToday: { color: T.primary },
-    dotRow: { flexDirection: 'row', gap: 2 },
+    chevronText: { fontSize: 24, color: T.primary },
+
+    // Day-of-week header
+    dowHeader: { flexDirection: 'row', marginBottom: 4 },
+    dowCell: { alignItems: 'center', paddingVertical: 4 },
+    dowText: { fontSize: 11, fontWeight: '700', color: T.textMuted, textTransform: 'uppercase' },
+
+    // Month grid
+    gridContainer: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 },
+    gridCell: { alignItems: 'center', justifyContent: 'flex-start', paddingTop: 6, borderRadius: 10 },
+    gridCellSelected: { borderRadius: 10 },
+    gridCellNum: { fontSize: 14, fontWeight: '500', color: T.text, marginBottom: 3 },
+    gridCellNumSelected: { color: '#FFFFFF', fontWeight: '800' },
+    dotRow: { flexDirection: 'row', gap: 2, height: 6, alignItems: 'center' },
     dot: { width: 5, height: 5, borderRadius: 2.5 },
 
-    filterScroll: { marginBottom: 16 },
-    filterPill: { borderRadius: 20, paddingVertical: 6, paddingHorizontal: 14, borderWidth: 1, borderColor: T.border, marginRight: 8 },
-    filterPillActive: { backgroundColor: T.primary, borderColor: T.primary },
-    filterPillText: { fontSize: 13, color: T.textMuted, fontWeight: '600' },
-    filterPillTextActive: { fontSize: 13, color: '#FFF', fontWeight: '600' },
+    // Selected day
+    dayTitleRow: {
+      flexDirection: 'row', alignItems: 'center',
+      justifyContent: 'space-between', marginBottom: 12,
+      paddingTop: 4,
+    },
+    dayTitle: {
+      fontSize: 15, fontWeight: '700', color: T.text,
+      textTransform: 'capitalize', flex: 1, marginRight: 8,
+    },
+    addEventBtn: {
+      borderWidth: 1.5, borderRadius: 20,
+      paddingVertical: 6, paddingHorizontal: 12,
+    },
+    addEventBtnText: { fontWeight: '700' },
 
-    dayTitle: { fontSize: 16, fontWeight: '700', color: T.text, marginBottom: 12, textTransform: 'capitalize' },
-    emptyDay: { paddingVertical: 32, alignItems: 'center' },
-    emptyDayText: { fontSize: 16, color: T.textMuted, textAlign: 'center' },
-    eventCard: { backgroundColor: T.surface, borderRadius: 12, padding: 14, marginBottom: 8, borderLeftWidth: 4, borderWidth: 1, borderColor: T.border, flexDirection: 'row', alignItems: 'center' },
-    eventCardConflict: { borderColor: T.amber + '60' },
+    emptyDay: { paddingVertical: 24, alignItems: 'center' },
+    emptyDayText: { fontSize: 15, color: T.textMuted, textAlign: 'center' },
+
+    eventCard: {
+      backgroundColor: T.surface,
+      borderRadius: 12, padding: 14,
+      marginBottom: 8, borderLeftWidth: 4,
+      borderWidth: 1, borderColor: T.border,
+      flexDirection: 'row', alignItems: 'center',
+    },
     eventLeft: { flex: 1 },
-    conflictBadge: { fontSize: 11, color: T.amber, fontWeight: '700', marginBottom: 4 },
     eventTitle: { fontSize: 15, fontWeight: '600', color: T.text, marginBottom: 2 },
-    eventMember: { fontSize: 12, color: T.textMuted },
-    memberColorDot: { width: 10, height: 10, borderRadius: 5, marginLeft: 8 },
+    eventTime: { fontSize: 12, color: T.textMuted },
+    memberColorDot: { width: 10, height: 10, borderRadius: 5 },
+    deleteBtn: { fontSize: 16, color: T.textMuted, paddingHorizontal: 4 },
 
-    freeTimeCard: { backgroundColor: T.surface, borderRadius: 14, padding: 16, marginTop: 8, borderWidth: 1, borderColor: T.primary + '40' },
+    freeTimeCard: {
+      backgroundColor: T.surface, borderRadius: 14,
+      padding: 16, marginTop: 8,
+      borderWidth: 1, borderColor: T.primary + '40',
+    },
     freeTimeTitle: { fontSize: 14, fontWeight: '700', color: T.text, marginBottom: 4 },
     freeTimeDesc: { fontSize: 13, color: T.textMuted, marginBottom: 12 },
     freeTimeBtn: { borderWidth: 1.5, borderColor: T.primary, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
@@ -595,7 +902,6 @@ function getStyles(T: RoleTheme) {
     routineEntry: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderLeftWidth: 3, paddingLeft: 10, marginBottom: 6, gap: 8 },
     routineTitle: { fontSize: 14, fontWeight: '600', color: T.text },
     routineMeta: { fontSize: 12, color: T.textMuted, marginTop: 2 },
-    deleteBtn: { fontSize: 16, color: T.textMuted, paddingHorizontal: 4 },
     addForMemberBtn: { paddingVertical: 10, alignItems: 'center' },
     addForMemberText: { color: T.primary, fontSize: 13, fontWeight: '600' },
 
@@ -604,13 +910,14 @@ function getStyles(T: RoleTheme) {
     templatePill: { borderWidth: 1.5, borderColor: T.primary, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 14 },
     templatePillText: { color: T.primary, fontWeight: '600', fontSize: 13 },
 
-    // Modal
+    // Modals
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
     modalCard: { backgroundColor: T.modalBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
     modalTitle: { fontSize: 20, fontWeight: '800', color: T.text, marginBottom: 16 },
     modalInput: { backgroundColor: T.modalInputBg, borderRadius: 10, padding: 12, color: T.text, fontSize: 15, marginBottom: 12, borderWidth: 1, borderColor: T.border },
     timeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
     modalLabel: { fontSize: 12, color: T.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 8, marginBottom: 8 },
+    allDayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, marginBottom: 4 },
     dayToggles: { flexDirection: 'row', gap: 6, marginBottom: 8, flexWrap: 'wrap' },
     dayToggle: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: T.border },
     dayToggleActive: { backgroundColor: T.primary, borderColor: T.primary },

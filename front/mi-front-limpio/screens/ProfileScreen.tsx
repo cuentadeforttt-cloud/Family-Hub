@@ -1,130 +1,430 @@
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 
-type RoleTheme = {
-  bg: string; surface: string; text: string; textMuted: string;
-  primary: string; border: string; label: string;
-  fs: number; touch: number;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const ROL_DISPLAY: Record<string, string> = {
+  coordinador: 'Coordinador del hogar',
+  adulto: 'Adulto',
+  adolescente: 'Adolescente',
+  adulto_mayor: 'Adulto mayor',
 };
 
-function getRoleTheme(role: string | null): RoleTheme {
-  switch (role) {
-    case 'adulto':
-      return { bg: '#FAFAF8', surface: '#FFFFFF', text: '#1C1C1C', textMuted: '#6B6B6B',
-               primary: '#CD7353', border: '#E2DFD6', label: '#6B6B6B', fs: 1.0, touch: 44 };
-    case 'adolescente':
-      return { bg: '#0F172A', surface: '#1E293B', text: '#FFFFFF', textMuted: '#94A3B8',
-               primary: '#6B4FE8', border: 'rgba(107,79,232,0.2)', label: '#94A3B8', fs: 1.0, touch: 44 };
-    case 'adulto_mayor':
-      return { bg: '#FFFAF5', surface: '#FFFFFF', text: '#1A1A1A', textMuted: '#555555',
-               primary: '#D4975A', border: 'rgba(212,151,90,0.25)', label: '#555555', fs: 1.2, touch: 56 };
-    default: // coordinador
-      return { bg: '#FAFAF8', surface: '#FFFFFF', text: '#1C1C1C', textMuted: '#6B6B6B',
-               primary: '#CD7353', border: '#E2DFD6', label: '#6B6B6B', fs: 1.0, touch: 44 };
-  }
+const ROL_COLORS: Record<string, string> = {
+  coordinador: '#CD7353',
+  adulto: '#7C9E7A',
+  adolescente: '#6B4FE8',
+  adulto_mayor: '#D4975A',
+};
+
+const AVATAR_BG_COLORS = ['#CD7353', '#6B4FE8', '#7C9E7A', '#D4975A', '#E57373', '#64B5F6'];
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
 }
 
-const ROL_DISPLAY: Record<string, string> = {
-  coordinador: 'Coordinador 👑', adulto: 'Adulto', adolescente: 'Adolescente', adulto_mayor: 'Adulto mayor',
-};
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_BG_COLORS[Math.abs(hash) % AVATAR_BG_COLORS.length];
+}
 
+function formatMemberSince(isoDate: string): string {
+  const d = new Date(isoDate);
+  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export const ProfileScreen = () => {
   const { user, signOut } = useAuth();
-  const { currentHousehold, currentRole, isCoordinator } = useHousehold();
+  const { currentHousehold, currentRole, isCoordinator, members } = useHousehold();
 
-  const T = useMemo(() => getRoleTheme(currentRole), [currentRole]);
-  const S = useMemo(() => getStyles(T), [T]);
-  const f = (size: number) => Math.round(size * T.fs);
+  // Settings toggles (UI only — not persisted yet)
+  const [notifEnabled, setNotifEnabled] = useState(true);
+  const [privacyEnabled, setPrivacyEnabled] = useState(false);
+  const [inviteTab, setInviteTab] = useState<'admin' | 'miembros'>('admin');
 
-  const isAdultoMayor = currentRole === 'adulto_mayor';
-  const isAdolescente = currentRole === 'adolescente';
+  const myName = user?.user_metadata?.nombre ?? 'Usuario';
+  const myInitials = getInitials(myName);
+  const myAvatarColor = getAvatarColor(myName);
+  const myEmail = user?.email ?? '—';
+  const memberSince = user?.created_at ? formatMemberSince(user.created_at) : '—';
 
-  const handleSignOut = async () => { await signOut(); };
+  const accentColor = ROL_COLORS[currentRole ?? ''] ?? '#CD7353';
+  const rolLabel = ROL_DISPLAY[currentRole ?? ''] ?? (currentRole ?? '—');
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Cerrar sesión',
+      '¿Estás seguro que quieres cerrar sesión?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Salir', style: 'destructive', onPress: () => void signOut() },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={S.safe} edges={['top']}>
-      <ScrollView style={S.container} contentContainerStyle={S.content} showsVerticalScrollIndicator={false}>
-        {/* Header / Avatar area */}
+      <ScrollView
+        style={S.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+      >
+        {/* ── Header bar ──────────────────────────────────────────────── */}
+        <View style={S.headerBar}>
+          <Text style={S.headerTitle}>Mi Perfil</Text>
+          {currentHousehold && (
+            <View style={S.grupoChip}>
+              <Text style={S.grupoChipText}>🏠 {currentHousehold.nombre}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── Avatar + identity ───────────────────────────────────────── */}
         <View style={S.avatarSection}>
-          <View style={[S.avatarCircle, { backgroundColor: T.primary + '22', borderColor: T.primary, width: f(72), height: f(72), borderRadius: f(36) }]}>
-            <Text style={{ fontSize: f(32) }}>{isAdolescente ? '🎮' : isAdultoMayor ? '🌟' : isCoordinator ? '👑' : '👤'}</Text>
+          <View style={[S.avatarCircle, { backgroundColor: myAvatarColor }]}>
+            <Text style={S.avatarText}>{myInitials}</Text>
           </View>
-          <Text style={[S.userName, { fontSize: f(22) }]}>
-            {user?.user_metadata?.nombre ?? 'Usuario'}
-          </Text>
-          <View style={[S.roleBadge, { backgroundColor: T.primary + '18' }]}>
-            <Text style={[S.roleBadgeText, { fontSize: f(13), color: T.primary }]}>
-              {ROL_DISPLAY[currentRole ?? ''] ?? (currentRole ?? '—')}
-            </Text>
+          <Text style={S.userName}>{myName}</Text>
+          <View style={[S.roleBadge, { backgroundColor: accentColor + '18' }]}>
+            <Text style={[S.roleBadgeText, { color: accentColor }]}>{rolLabel}</Text>
+          </View>
+          <TouchableOpacity onPress={() => Alert.alert('Editar perfil', 'Próximamente.')}>
+            <Text style={[S.editProfileLink, { color: accentColor }]}>Editar perfil</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Stats row ───────────────────────────────────────────────── */}
+        <View style={S.statsRow}>
+          {[
+            { value: '147', label: 'Actividades' },
+            { value: '38',  label: 'Racha' },
+            { value: '12',  label: 'Logros' },
+          ].map((stat, i) => (
+            <React.Fragment key={stat.label}>
+              <View style={S.statItem}>
+                <Text style={[S.statValue, { color: accentColor }]}>{stat.value}</Text>
+                <Text style={S.statLabel}>{stat.label}</Text>
+              </View>
+              {i < 2 && <View style={S.statDivider} />}
+            </React.Fragment>
+          ))}
+        </View>
+
+        {/* ── Info cards ──────────────────────────────────────────────── */}
+        <View style={S.section}>
+          <InfoRow icon="✉️" label="Email" value={myEmail} />
+          <InfoRow icon="📅" label="Miembro desde" value={memberSince} />
+          {currentHousehold && (
+            <InfoRow icon="🏠" label="Hogar" value={currentHousehold.nombre} />
+          )}
+        </View>
+
+        {/* ── Mi familia ──────────────────────────────────────────────── */}
+        <View style={S.sectionHeader}>
+          <Text style={S.sectionTitle}>Mi familia</Text>
+          <Text style={S.sectionCount}>{members.length} miembros</Text>
+        </View>
+        <View style={S.section}>
+          {members.length === 0 ? (
+            <Text style={S.emptyText}>No hay miembros en el hogar aún.</Text>
+          ) : (
+            members.map(m => {
+              const mName = m.user?.nombre ?? 'Miembro';
+              const mInitials = getInitials(mName);
+              const mColor = getAvatarColor(mName);
+              const mRolColor = ROL_COLORS[m.rol] ?? '#888888';
+              return (
+                <View key={m.id} style={S.memberRow}>
+                  <View style={[S.memberAvatar, { backgroundColor: mColor }]}>
+                    <Text style={S.memberAvatarText}>{mInitials}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.memberName}>{mName}</Text>
+                    <Text style={[S.memberRole, { color: mRolColor }]}>
+                      {ROL_DISPLAY[m.rol] ?? m.rol}
+                    </Text>
+                  </View>
+                  {m.user_id === user?.id && (
+                    <View style={[S.youBadge, { backgroundColor: accentColor + '18' }]}>
+                      <Text style={[S.youBadgeText, { color: accentColor }]}>Tú</Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </View>
+
+        {/* ── Configuración ───────────────────────────────────────────── */}
+        <View style={S.sectionHeader}>
+          <Text style={S.sectionTitle}>Configuración</Text>
+        </View>
+        <View style={S.section}>
+          <View style={S.settingRow}>
+            <Text style={S.settingIcon}>🔔</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={S.settingLabel}>Notificaciones</Text>
+              <Text style={S.settingDesc}>Alertas del hogar y eventos</Text>
+            </View>
+            <Switch
+              value={notifEnabled}
+              onValueChange={setNotifEnabled}
+              trackColor={{ false: '#E2DFD6', true: accentColor }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+          <View style={[S.settingRow, S.settingRowBorder]}>
+            <Text style={S.settingIcon}>🔒</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={S.settingLabel}>Privacidad y seguridad</Text>
+              <Text style={S.settingDesc}>Datos y contraseña</Text>
+            </View>
+            <TouchableOpacity onPress={() => Alert.alert('Privacidad', 'Próximamente.')}>
+              <Text style={S.chevron}>›</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={[S.settingRow, S.settingRowBorder]}>
+            <Text style={S.settingIcon}>🎨</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={S.settingLabel}>Apariencia</Text>
+              <Text style={S.settingDesc}>Tema y preferencias</Text>
+            </View>
+            <TouchableOpacity onPress={() => Alert.alert('Apariencia', 'Próximamente.')}>
+              <Text style={S.chevron}>›</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Info cards */}
-        <View style={[S.infoCard, { minHeight: T.touch }]}>
-          <Text style={[S.infoLabel, { fontSize: f(11) }]}>Nombre</Text>
-          <Text style={[S.infoValue, { fontSize: f(16) }]}>{user?.user_metadata?.nombre ?? '—'}</Text>
-        </View>
-        <View style={[S.infoCard, { minHeight: T.touch }]}>
-          <Text style={[S.infoLabel, { fontSize: f(11) }]}>Email</Text>
-          <Text style={[S.infoValue, { fontSize: f(16) }]}>{user?.email ?? '—'}</Text>
-        </View>
-        <View style={[S.infoCard, { minHeight: T.touch }]}>
-          <Text style={[S.infoLabel, { fontSize: f(11) }]}>Hogar</Text>
-          <Text style={[S.infoValue, { fontSize: f(16) }]}>{currentHousehold?.nombre ?? '—'}</Text>
-        </View>
-        <View style={[S.infoCard, { minHeight: T.touch }]}>
-          <Text style={[S.infoLabel, { fontSize: f(11) }]}>Rol</Text>
-          <Text style={[S.infoValue, { fontSize: f(16) }]}>
-            {ROL_DISPLAY[currentRole ?? ''] ?? (currentRole ?? '—')}
-          </Text>
-        </View>
+        {/* ── Área de invitación (solo coordinador) ───────────────────── */}
+        {isCoordinator && (
+          <>
+            <View style={S.sectionHeader}>
+              <Text style={S.sectionTitle}>Área de invitación</Text>
+            </View>
+            <View style={S.section}>
+              {/* Admin / Miembros toggle */}
+              <View style={S.inviteToggle}>
+                <TouchableOpacity
+                  style={[S.inviteTabBtn, inviteTab === 'admin' && S.inviteTabBtnActive]}
+                  onPress={() => setInviteTab('admin')}
+                >
+                  <Text style={[S.inviteTabText, inviteTab === 'admin' && S.inviteTabTextActive]}>
+                    Administradores
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[S.inviteTabBtn, inviteTab === 'miembros' && S.inviteTabBtnActive]}
+                  onPress={() => setInviteTab('miembros')}
+                >
+                  <Text style={[S.inviteTabText, inviteTab === 'miembros' && S.inviteTabTextActive]}>
+                    Miembros ({members.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-        {/* Adulto mayor: accessibility note */}
-        {isAdultoMayor && (
-          <View style={[S.infoCard, { backgroundColor: T.primary + '12', borderColor: T.primary + '40' }]}>
-            <Text style={{ fontSize: f(15), color: T.text, lineHeight: f(22) }}>
-              🔒 Tu sesión está protegida. Para cambiar tu contraseña, pídele ayuda a un familiar.
-            </Text>
-          </View>
+              {inviteTab === 'admin' ? (
+                <View style={S.inviteInfoBox}>
+                  <Text style={S.inviteInfoText}>
+                    👑 Como coordinador puedes gestionar el hogar, invitar nuevos miembros y configurar los permisos de cada integrante.
+                  </Text>
+                  <TouchableOpacity
+                    style={[S.inviteActionBtn, { backgroundColor: accentColor }]}
+                    onPress={() => Alert.alert('Invitar', 'Ve a Configuración → Invitar personas para generar un enlace QR.')}
+                  >
+                    <Text style={S.inviteActionBtnText}>Invitar personas</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View>
+                  {members.map(m => {
+                    const mName = m.user?.nombre ?? 'Miembro';
+                    const mInitials = getInitials(mName);
+                    const mColor = getAvatarColor(mName);
+                    return (
+                      <View key={m.id} style={S.memberRow}>
+                        <View style={[S.memberAvatar, { backgroundColor: mColor }]}>
+                          <Text style={S.memberAvatarText}>{mInitials}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={S.memberName}>{mName}</Text>
+                          <Text style={[S.memberRole, { color: ROL_COLORS[m.rol] ?? '#888' }]}>
+                            {ROL_DISPLAY[m.rol] ?? m.rol}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </>
         )}
 
-        {/* Sign out button */}
-        <TouchableOpacity
-          style={[S.signOutBtn, { minHeight: T.touch + 10 }]}
-          onPress={() => void handleSignOut()}
-          accessibilityRole="button"
-        >
-          <Text style={[S.signOutText, { fontSize: f(15) }]}>
-            {isAdultoMayor ? '🚪 Cerrar sesión' : 'Cerrar sesión'}
-          </Text>
+        {/* ── Cerrar sesión ───────────────────────────────────────────── */}
+        <TouchableOpacity style={S.signOutBtn} onPress={handleSignOut}>
+          <Text style={S.signOutText}>Cerrar sesión</Text>
         </TouchableOpacity>
 
-        <View style={{ height: 32 }} />
       </ScrollView>
     </SafeAreaView>
   );
 };
 
-function getStyles(T: RoleTheme) {
-  return StyleSheet.create({
-    safe: { flex: 1, backgroundColor: T.bg },
-    container: { flex: 1 },
-    content: { padding: 24 },
-
-    avatarSection: { alignItems: 'center', marginBottom: 28 },
-    avatarCircle: { alignItems: 'center', justifyContent: 'center', borderWidth: 2, marginBottom: 12 },
-    userName: { fontSize: 22, fontWeight: '800', color: T.text, marginBottom: 8 },
-    roleBadge: { borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14 },
-    roleBadgeText: { fontWeight: '700' },
-
-    infoCard: { backgroundColor: T.surface, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: T.border, justifyContent: 'center' },
-    infoLabel: { fontSize: 11, color: T.label, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-    infoValue: { fontSize: 16, color: T.text, fontWeight: '500' },
-
-    signOutBtn: { marginTop: 24, borderWidth: 1.5, borderColor: T.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-    signOutText: { color: T.primary, fontWeight: '700' },
-  });
+// ─── InfoRow helper ───────────────────────────────────────────────────────────
+function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <View style={S.infoRow}>
+      <Text style={S.infoIcon}>{icon}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={S.infoLabel}>{label}</Text>
+        <Text style={S.infoValue} numberOfLines={1}>{value}</Text>
+      </View>
+    </View>
+  );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const S = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#FAFAF8' },
+  scroll: { flex: 1 },
+
+  // Header bar
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  headerTitle: { fontSize: 22, fontWeight: '800', color: '#1C1C1C' },
+  grupoChip: {
+    backgroundColor: '#F0EDE8',
+    borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12,
+  },
+  grupoChipText: { fontSize: 12, fontWeight: '600', color: '#888888' },
+
+  // Avatar section
+  avatarSection: { alignItems: 'center', paddingVertical: 24 },
+  avatarCircle: {
+    width: 88, height: 88, borderRadius: 44,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 14,
+  },
+  avatarText: { color: '#FFFFFF', fontSize: 34, fontWeight: '800' },
+  userName: { fontSize: 22, fontWeight: '800', color: '#1C1C1C', marginBottom: 8 },
+  roleBadge: { borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14, marginBottom: 10 },
+  roleBadgeText: { fontWeight: '700', fontSize: 13 },
+  editProfileLink: { fontSize: 13, fontWeight: '600' },
+
+  // Stats
+  statsRow: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2DFD6',
+  },
+  statItem: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 24, fontWeight: '800', marginBottom: 4 },
+  statLabel: { fontSize: 11, color: '#888888', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
+  statDivider: { width: 1, backgroundColor: '#E2DFD6', marginVertical: 4 },
+
+  // Generic section
+  section: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2DFD6',
+    overflow: 'hidden',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  sectionTitle: { fontSize: 17, fontWeight: '800', color: '#1C1C1C' },
+  sectionCount: { fontSize: 13, color: '#888888', fontWeight: '600' },
+  emptyText: { fontSize: 14, color: '#888888', textAlign: 'center', padding: 20 },
+
+  // Info rows
+  infoRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, gap: 12,
+    borderBottomWidth: 1, borderBottomColor: '#F0EDE8',
+  },
+  infoIcon: { fontSize: 20, width: 28, textAlign: 'center' },
+  infoLabel: { fontSize: 11, color: '#888888', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
+  infoValue: { fontSize: 15, color: '#1C1C1C', fontWeight: '500' },
+
+  // Member rows
+  memberRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, gap: 12,
+    borderBottomWidth: 1, borderBottomColor: '#F0EDE8',
+  },
+  memberAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  memberAvatarText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
+  memberName: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
+  memberRole: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  youBadge: { borderRadius: 10, paddingVertical: 3, paddingHorizontal: 8 },
+  youBadgeText: { fontSize: 11, fontWeight: '700' },
+
+  // Settings rows
+  settingRow: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 14, gap: 12,
+  },
+  settingRowBorder: { borderTopWidth: 1, borderTopColor: '#F0EDE8' },
+  settingIcon: { fontSize: 22, width: 28, textAlign: 'center' },
+  settingLabel: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
+  settingDesc: { fontSize: 12, color: '#888888', marginTop: 1 },
+  chevron: { fontSize: 22, color: '#CCCCCC', fontWeight: '600' },
+
+  // Invite area
+  inviteToggle: {
+    flexDirection: 'row', margin: 14, marginBottom: 10,
+    backgroundColor: '#F3F2EE', borderRadius: 10, padding: 3,
+  },
+  inviteTabBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
+  inviteTabBtnActive: { backgroundColor: '#FFFFFF' },
+  inviteTabText: { fontSize: 13, fontWeight: '600', color: '#888888' },
+  inviteTabTextActive: { color: '#1C1C1C' },
+  inviteInfoBox: { padding: 14, paddingTop: 4 },
+  inviteInfoText: { fontSize: 14, color: '#555555', lineHeight: 20, marginBottom: 14 },
+  inviteActionBtn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  inviteActionBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
+
+  // Sign out
+  signOutBtn: {
+    marginHorizontal: 20, marginBottom: 12,
+    borderWidth: 1.5, borderColor: '#E57373',
+    borderRadius: 14, paddingVertical: 15,
+    alignItems: 'center',
+  },
+  signOutText: { color: '#E57373', fontWeight: '700', fontSize: 15 },
+});

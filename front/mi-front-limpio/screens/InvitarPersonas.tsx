@@ -88,9 +88,11 @@ export const P03InvitarPersonas = ({ navigation, route }: Props) => {
     ]);
   };
 
-  const handleContinue = async () => {
-    await reload();
-    navigation.navigate('HomeTabs');
+  const handleContinue = () => {
+    // replace() para que el botón Atrás no vuelva a esta pantalla.
+    // reload() en background: usa reloading (no loading), no desmonta el navigator.
+    navigation.replace('HomeTabs');
+    void reload();
   };
 
   const expiresLabel = (expiresAt: string) => {
@@ -118,7 +120,7 @@ export const P03InvitarPersonas = ({ navigation, route }: Props) => {
           <TouchableOpacity
             key={r.id}
             style={[styles.roleCard, selectedRole === r.id && styles.roleCardSelected]}
-            onPress={() => setSelectedRole(r.id)}
+            onPress={() => { setSelectedRole(r.id); setActiveInvitation(null); }}
           >
             <Text style={styles.roleIcon}>{r.icon}</Text>
             <View style={{ flex: 1 }}>

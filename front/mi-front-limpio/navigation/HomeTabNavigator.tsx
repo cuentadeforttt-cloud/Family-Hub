@@ -1,6 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import type { HomeTabParamList } from './types';
 import { useHousehold } from '../context/HouseholdContext';
 import { HomeCoordinador } from '../screens/home/HomeCoordinador';
@@ -8,12 +8,11 @@ import { HomeAdulto } from '../screens/home/HomeAdulto';
 import { HomeAdolescente } from '../screens/home/HomeAdolescente';
 import { HomeAdultoMayor } from '../screens/home/HomeAdultoMayor';
 import { CalendarScreen } from '../screens/calendar/CalendarScreen';
-import { FamilyScreen } from '../screens/FamilyScreen';
+import { FeedFamiliarScreen } from '../screens/feed/FeedFamiliarScreen';
+import { InventarioScreen } from '../screens/inventory/InventarioScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 
 const Tab = createBottomTabNavigator<HomeTabParamList>();
-
-const DARK_ROLES = ['coordinador', 'adolescente'] as const;
 
 const TabIcon = ({
   icon,
@@ -26,13 +25,13 @@ const TabIcon = ({
   focused: boolean;
   accentColor: string;
 }) => (
-  <View style={{ alignItems: 'center', paddingTop: 6, minWidth: 52 }}>
-    <Text style={{ fontSize: 22 }}>{icon}</Text>
+  <View style={{ alignItems: 'center', paddingTop: 6, minWidth: 48 }}>
+    <Text style={{ fontSize: 21 }}>{icon}</Text>
     <Text
       style={{
-        fontSize: 10,
+        fontSize: 9,
         marginTop: 2,
-        fontWeight: focused ? '600' : '400',
+        fontWeight: focused ? '700' : '400',
         color: focused ? accentColor : '#888888',
       }}
     >
@@ -45,7 +44,7 @@ const TabIcon = ({
           height: 4,
           borderRadius: 2,
           backgroundColor: accentColor,
-          marginTop: 3,
+          marginTop: 2,
         }}
       />
     )}
@@ -53,12 +52,24 @@ const TabIcon = ({
 );
 
 function HomeScreen() {
-  const { currentRole } = useHousehold();
+  const { currentRole, loading, reloading } = useHousehold();
+
+  // Mientras el contexto está cargando el rol mostramos un spinner
+  if (loading || reloading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#FAFAF8', alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color="#CD7353" />
+      </View>
+    );
+  }
+
   if (currentRole === 'coordinador')  return <HomeCoordinador />;
   if (currentRole === 'adulto')       return <HomeAdulto />;
   if (currentRole === 'adolescente')  return <HomeAdolescente />;
   if (currentRole === 'adulto_mayor') return <HomeAdultoMayor />;
-  return null;
+
+  // Fallback: rol desconocido
+  return <HomeCoordinador />;
 }
 
 export function HomeTabNavigator() {
@@ -68,12 +79,12 @@ export function HomeTabNavigator() {
   const isAdultoMayor = currentRole === 'adulto_mayor';
 
   const accentColor =
-    currentRole === 'coordinador'  ? '#CD7353'
+    currentRole === 'coordinador'   ? '#CD7353'
     : currentRole === 'adolescente' ? '#6B4FE8'
     : currentRole === 'adulto_mayor' ? '#D4975A'
     : '#CD7353';
 
-  const tabBarBg = isDark ? '#0D1117' : '#FFFFFF';
+  const tabBarBg     = isDark ? '#0D1117' : '#FFFFFF';
   const tabBarBorder = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
   const tabBarHeight = isAdultoMayor ? 84 : 72;
 
@@ -91,41 +102,79 @@ export function HomeTabNavigator() {
         },
       }}
     >
+      {/* 1 – Inicio */}
       <Tab.Screen
         name="HomeTab"
         component={HomeScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="🏠" label={isAdultoMayor ? 'Inicio' : 'Inicio'} focused={focused} accentColor={accentColor} />
+            <TabIcon
+              icon="🏠"
+              label="Inicio"
+              focused={focused}
+              accentColor={accentColor}
+            />
           ),
         }}
       />
+
+      {/* 2 – Calendario */}
       <Tab.Screen
         name="CalendarTab"
         component={CalendarScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="📅" label={isAdultoMayor ? 'Mi Día' : 'Calendario'} focused={focused} accentColor={accentColor} />
+            <TabIcon
+              icon="📅"
+              label={isAdultoMayor ? 'Mi Día' : 'Calendario'}
+              focused={focused}
+              accentColor={accentColor}
+            />
           ),
         }}
       />
+
+      {/* 3 – Feed Familiar */}
       <Tab.Screen
-        name="FamilyTab"
-        component={FamilyScreen}
+        name="FeedTab"
+        component={FeedFamiliarScreen}
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabIcon icon="👨‍👩‍👧" label="Familia" focused={focused} accentColor={accentColor} />
+            <TabIcon
+              icon="📸"
+              label="Feed"
+              focused={focused}
+              accentColor={accentColor}
+            />
           ),
         }}
       />
+
+      {/* 4 – Inventario */}
+      <Tab.Screen
+        name="InventarioTab"
+        component={InventarioScreen}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              icon="🛒"
+              label="Inventario"
+              focused={focused}
+              accentColor={accentColor}
+            />
+          ),
+        }}
+      />
+
+      {/* 5 – Perfil */}
       <Tab.Screen
         name="ProfileTab"
         component={ProfileScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
-              icon={currentRole === 'adolescente' ? '👤' : '👤'}
-              label={isAdultoMayor ? 'Llamar' : 'Perfil'}
+              icon="👤"
+              label="Perfil"
               focused={focused}
               accentColor={accentColor}
             />
