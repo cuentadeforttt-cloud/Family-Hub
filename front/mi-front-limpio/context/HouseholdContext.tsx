@@ -1,13 +1,7 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
-import { getUserHousehold, getHouseholdMembers } from '../services/households';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { Household, HouseholdMember } from '../services/households';
+import type { AuthMeHousehold, AuthMeMembership } from '../services/api';
+import { supabase } from '../supabase';
 import { useAuth } from './AuthContext';
 
 type HouseholdContextType = {
@@ -23,108 +17,152 @@ type HouseholdContextType = {
 
 const HouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
 
+const mapRole = (role: AuthMeMembership['role']): HouseholdMember['rol'] | null => {
+  if (role === 'coordinator') return 'coordinador';
+  if (role === 'adult') return 'adulto';
+  if (role === 'adolescent' || role === 'child' || role === 'guest') return 'adolescente';
+  if (role === 'senior') return 'adulto_mayor';
+  return null;
+};
+
+const mapHousehold = (household: AuthMeHousehold): Household => ({
+  id: household.id,
+  nombre: household.name,
+  tipo: null,
+  foto_url: null,
+  created_by: household.created_by_person_id,
+  created_at: household.created_at,
+});
+
+type PublicHouseholdPerson = {
+  person_id: string;
+  household_id: string;
+  membership_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  role: AuthMeMembership['role'];
+  status: AuthMeMembership['status'];
+  joined_at: string | null;
+};
+
 export const HouseholdProvider = ({ children }: { children: React.ReactNode }) => {
-  const { user } = useAuth();
+  const { authMe, authMeLoading, authMeError, refetchMe, user } = useAuth();
+  const [reloading, setReloading] = useState(false);
+  const [members, setMembers] = useState<HouseholdMember[]>([]);
+  const [membersError, setMembersError] = useState<string | null>(null);
 
-  const [currentHousehold, setCurrentHousehold] = useState<Household | null>(null);
-  const [currentRole, setCurrentRole]           = useState<HouseholdMember['rol'] | null>(null);
-  const [members, setMembers]                   = useState<HouseholdMember[]>([]);
-  const [rawLoading, setRawLoading]             = useState(false);
-  const [reloading, setReloading]               = useState(false);
-  const [householdError, setHouseholdError]     = useState<string | null>(null);
+  const activeMembership = useMemo(() => {
+    const activeHouseholdId = authMe?.active_household?.id;
+    const memberships = authMe?.memberships ?? [];
 
-  // ID del último usuario para el que se completó el fetch.
-  // undefined = nunca se hizo fetch; null = fetch completado sin usuario.
-  const [fetchedForUserId, setFetchedForUserId] = useState<string | null | undefined>(undefined);
+    if (activeHouseholdId) {
+      return memberships.find(
+        (membership) => membership.household_id === activeHouseholdId && membership.status === 'active',
+      ) ?? null;
+    }
 
-  // LOADING DERIVADO — true síncronamente en el render donde user cambia a truthy,
-  // antes de que el useEffect dispare load(). Evita que PrivateNavigator monte
-  // el stack con initialRouteName incorrecto durante la race condition de auth.
-  const loading = rawLoading || (!!user && fetchedForUserId !== user.id);
+    return memberships.find((membership) => membership.status === 'active') ?? null;
+  }, [authMe?.active_household?.id, authMe?.memberships]);
 
-  // Carga inicial — mantiene el navigator en <AuthLoadingScreen /> hasta resolver
-  const load = useCallback(async () => {
-    if (!user) {
-      setCurrentHousehold(null);
-      setCurrentRole(null);
+  const currentHousehold = useMemo(
+    () => authMe?.active_household ? mapHousehold(authMe.active_household) : null,
+    [authMe?.active_household],
+  );
+
+  const currentRole = useMemo(() => mapRole(activeMembership?.role ?? null), [activeMembership?.role]);
+
+  const fallbackMembers = useMemo<HouseholdMember[]>(() => {
+    if (!currentHousehold || !activeMembership) return [];
+
+    const displayName = authMe?.person?.display_name ?? user?.email ?? 'Usuario';
+
+    return [{
+      id: activeMembership.id,
+      user_id: user?.id ?? authMe?.person?.auth_user_id ?? activeMembership.person_id,
+      household_id: currentHousehold.id,
+      rol: currentRole ?? 'adulto',
+      joined_at: activeMembership.joined_at ?? activeMembership.created_at,
+      invited_by: null,
+      user: {
+        nombre: displayName,
+        email: user?.email ?? '',
+        avatar_url: authMe?.person?.avatar_url ?? null,
+      },
+    }];
+  }, [activeMembership, authMe?.person, currentHousehold, currentRole, user]);
+
+  const loadMembers = useCallback(async () => {
+    if (!currentHousehold) {
       setMembers([]);
-      setHouseholdError(null);
-      setFetchedForUserId(null);
-      setRawLoading(false);
+      setMembersError(null);
       return;
     }
 
-    setRawLoading(true);
-    setHouseholdError(null);
-
-    const { household, role, error } = await getUserHousehold(user.id);
+    const { data, error } = await supabase
+      .from('household_people_public')
+      .select('person_id, household_id, membership_id, display_name, avatar_url, role, status, joined_at')
+      .eq('household_id', currentHousehold.id)
+      .eq('status', 'active')
+      .order('joined_at', { ascending: true });
 
     if (error) {
-      setHouseholdError(error);
-      setFetchedForUserId(user.id); // marcar como chequeado aunque sea error
-      setRawLoading(false);
+      setMembers(fallbackMembers);
+      setMembersError('No pudimos cargar los miembros del hogar.');
       return;
     }
 
-    setCurrentHousehold(household);
-    setCurrentRole(role);
+    const mappedMembers = ((data ?? []) as PublicHouseholdPerson[])
+      .map((member) => ({
+        id: member.membership_id,
+        user_id: member.person_id,
+        household_id: member.household_id,
+        rol: mapRole(member.role) ?? 'adulto',
+        joined_at: member.joined_at ?? new Date().toISOString(),
+        invited_by: null,
+        user: {
+          nombre: member.display_name,
+          email: '',
+          avatar_url: member.avatar_url,
+        },
+      }));
 
-    if (household) {
-      const { members: m } = await getHouseholdMembers(household.id);
-      setMembers(m);
-    } else {
-      setMembers([]);
-    }
-
-    setFetchedForUserId(user.id); // marcar fetch completado para este usuario
-    setRawLoading(false);
-  }, [user]);
-
-  // Recarga posterior — usa reloading (no rawLoading) para no desmontar el navigator
-  const reload = useCallback(async () => {
-    if (!user) return;
-
-    setReloading(true);
-    setHouseholdError(null);
-
-    const { household, role, error } = await getUserHousehold(user.id);
-
-    if (error) {
-      setHouseholdError(error);
-      setReloading(false);
-      return;
-    }
-
-    setCurrentHousehold(household);
-    setCurrentRole(role);
-
-    if (household) {
-      const { members: m } = await getHouseholdMembers(household.id);
-      setMembers(m);
-    } else {
-      setMembers([]);
-    }
-
-    setFetchedForUserId(user.id);
-    setReloading(false);
-  }, [user]);
+    setMembers(mappedMembers.length > 0 ? mappedMembers : fallbackMembers);
+    setMembersError(null);
+  }, [currentHousehold, fallbackMembers]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadMembers();
+  }, [loadMembers]);
+
+  const reload = useCallback(async () => {
+    setReloading(true);
+    await refetchMe();
+    await loadMembers();
+    setReloading(false);
+  }, [loadMembers, refetchMe]);
 
   const value = useMemo<HouseholdContextType>(
     () => ({
       currentHousehold,
       currentRole,
       members,
-      isCoordinator: currentRole === 'coordinador',
-      loading,       // derivado: cubre la race condition de auth
+      isCoordinator: activeMembership?.role === 'coordinator',
+      loading: authMeLoading,
       reloading,
-      householdError,
+      householdError: authMeError ?? membersError,
       reload,
     }),
-    [currentHousehold, currentRole, members, loading, reloading, householdError, reload],
+    [
+      activeMembership?.role,
+      authMeError,
+      authMeLoading,
+      currentHousehold,
+      currentRole,
+      members,
+      membersError,
+      reload,
+      reloading,
+    ],
   );
 
   return <HouseholdContext.Provider value={value}>{children}</HouseholdContext.Provider>;

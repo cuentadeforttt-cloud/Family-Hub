@@ -11,6 +11,15 @@ import { AppState, Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session, User } from '@supabase/supabase-js';
+import {
+  ApiError,
+  authLogin,
+  authLogout,
+  authRegister,
+  getAuthMe,
+  type AuthMe,
+  type AuthSession,
+} from '../services/api';
 import { supabase } from '../supabase';
 import { getAuthErrorMessage } from '../utils/authErrors';
 
@@ -40,6 +49,9 @@ export type AuthContextType = {
   user: User | null;
   loading: boolean;
   initialized: boolean;
+  authMe: AuthMe | null;
+  authMeLoading: boolean;
+  authMeError: string | null;
   isPasswordRecovery: boolean;
   pendingJoinToken: string | null;
   signIn: (params: SignInParams) => Promise<AuthActionResult>;
@@ -48,6 +60,7 @@ export type AuthContextType = {
   resetPassword: (email: string) => Promise<AuthActionResult>;
   updatePassword: (password: string) => Promise<AuthActionResult>;
   refreshSession: () => Promise<AuthActionResult>;
+  refetchMe: () => Promise<AuthMe | null>;
   handleIncomingUrl: (url: string) => Promise<AuthActionResult>;
   clearPasswordRecovery: () => void;
   clearPendingJoinToken: () => Promise<void>;
@@ -98,9 +111,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const [authMe, setAuthMe] = useState<AuthMe | null>(null);
+  const [authMeLoading, setAuthMeLoading] = useState(false);
+  const [authMeError, setAuthMeError] = useState<string | null>(null);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [pendingJoinToken, setPendingJoinToken] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+  const authMeRequestIdRef = useRef(0);
 
   const applySession = useCallback((nextSession: Session | null) => {
     if (!isMountedRef.current) {
@@ -110,6 +127,76 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setSession(nextSession);
     setUser(nextSession?.user ?? null);
   }, []);
+
+  const clearAuthMe = useCallback(() => {
+    authMeRequestIdRef.current += 1;
+    setAuthMe(null);
+    setAuthMeError(null);
+    setAuthMeLoading(false);
+  }, []);
+
+  const loadAuthMe = useCallback(async (accessToken: string): Promise<AuthMe | null> => {
+    const requestId = authMeRequestIdRef.current + 1;
+    authMeRequestIdRef.current = requestId;
+
+    if (isMountedRef.current) {
+      setAuthMeLoading(true);
+      setAuthMeError(null);
+    }
+
+    try {
+      const nextAuthMe = await getAuthMe(accessToken);
+
+      if (isMountedRef.current && authMeRequestIdRef.current === requestId) {
+        setAuthMe(nextAuthMe);
+      }
+
+      return nextAuthMe;
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : 'No pudimos cargar tu sesion de HomePlus.';
+
+      if (isMountedRef.current && authMeRequestIdRef.current === requestId) {
+        setAuthMe(null);
+        setAuthMeError(message);
+      }
+
+      return null;
+    } finally {
+      if (isMountedRef.current && authMeRequestIdRef.current === requestId) {
+        setAuthMeLoading(false);
+      }
+    }
+  }, []);
+
+  const persistBackendSession = useCallback(
+    async (backendSession: AuthSession): Promise<AuthActionResult> => {
+      if (!backendSession.access_token || !backendSession.refresh_token) {
+        return {
+          error: 'El backend no devolvio una sesion valida. Intenta nuevamente.',
+        };
+      }
+
+      const { data, error } = await supabase.auth.setSession({
+        access_token: backendSession.access_token,
+        refresh_token: backendSession.refresh_token,
+      });
+
+      if (error) {
+        return {
+          error: getAuthErrorMessage(
+            error,
+            'No pudimos guardar tu sesion en este dispositivo. Intenta nuevamente.',
+          ),
+        };
+      }
+
+      applySession(data.session);
+      return { error: null };
+    },
+    [applySession],
+  );
 
   const refreshSession = useCallback(async (): Promise<AuthActionResult> => {
     const { data, error } = await supabase.auth.getSession();
@@ -126,6 +213,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     applySession(data.session);
     return { error: null };
   }, [applySession]);
+
+  const refetchMe = useCallback(async (): Promise<AuthMe | null> => {
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      clearAuthMe();
+      return null;
+    }
+
+    return loadAuthMe(accessToken);
+  }, [clearAuthMe, loadAuthMe, session?.access_token]);
 
   const handleIncomingUrl = useCallback(
     async (url: string): Promise<AuthActionResult> => {
@@ -270,70 +368,111 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, [applySession, handleIncomingUrl, refreshSession]);
 
-  const signIn = useCallback(async ({ email, password }: SignInParams): Promise<AuthActionResult> => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: normalizeEmail(email),
-      password,
-    });
+  useEffect(() => {
+    const accessToken = session?.access_token;
 
-    if (error) {
-      return {
-        error: getAuthErrorMessage(
-          error,
-          'No pudimos iniciar sesion. Revisa tus datos e intenta nuevamente.',
-        ),
-      };
+    if (!accessToken) {
+      clearAuthMe();
+      return;
     }
 
-    return { error: null };
-  }, []);
+    void loadAuthMe(accessToken);
+  }, [clearAuthMe, loadAuthMe, session?.access_token]);
+
+  const signIn = useCallback(async ({ email, password }: SignInParams): Promise<AuthActionResult> => {
+    try {
+      const response = await authLogin({
+        email: normalizeEmail(email),
+        password,
+      });
+
+      const persistResult = await persistBackendSession(response.session);
+
+      if (persistResult.error) {
+        return persistResult;
+      }
+
+      await loadAuthMe(response.session.access_token);
+      return { error: null };
+    } catch (error) {
+      return {
+        error: error instanceof ApiError
+          ? error.message
+          : 'No pudimos iniciar sesion. Revisa tus datos e intenta nuevamente.',
+      };
+    }
+  }, [loadAuthMe, persistBackendSession]);
 
   const signUp = useCallback(
     async ({ email, password, nombre }: SignUpParams): Promise<SignUpResult> => {
-      const { data, error } = await supabase.auth.signUp({
-        email: normalizeEmail(email),
-        password,
-        options: {
-          data: {
-            nombre: nombre.trim(),
-          },
-          emailRedirectTo: getAuthRedirectUrl(),
-        },
-      });
+      try {
+        const response = await authRegister({
+          email: normalizeEmail(email),
+          password,
+          display_name: nombre.trim(),
+        });
 
-      if (error) {
+        if (!response.session) {
+          clearAuthMe();
+          return {
+            error: null,
+            needsEmailConfirmation: response.requires_email_confirmation,
+          };
+        }
+
+        const persistResult = await persistBackendSession(response.session);
+
+        if (persistResult.error) {
+          return {
+            error: persistResult.error,
+            needsEmailConfirmation: false,
+          };
+        }
+
+        await loadAuthMe(response.session.access_token);
         return {
-          error: getAuthErrorMessage(
-            error,
-            'No pudimos crear tu cuenta. Verifica tus datos e intenta nuevamente.',
-          ),
+          error: null,
+          needsEmailConfirmation: false,
+        };
+      } catch (error) {
+        return {
+          error: error instanceof ApiError
+            ? error.message
+            : 'No pudimos crear tu cuenta. Verifica tus datos e intenta nuevamente.',
           needsEmailConfirmation: false,
         };
       }
-
-      return {
-        error: null,
-        needsEmailConfirmation: !data.session,
-      };
     },
-    [],
+    [clearAuthMe, loadAuthMe, persistBackendSession],
   );
 
   const signOut = useCallback(async (): Promise<AuthActionResult> => {
-    const { error } = await supabase.auth.signOut();
+    let backendError: string | null = null;
+
+    try {
+      await authLogout(session?.access_token);
+    } catch (error) {
+      backendError = error instanceof ApiError
+        ? error.message
+        : 'No pudimos cerrar tu sesion en el servidor.';
+    }
+
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+
+    setIsPasswordRecovery(false);
+    clearAuthMe();
 
     if (error) {
       return {
         error: getAuthErrorMessage(
           error,
-          'No pudimos cerrar tu sesion. Intenta nuevamente.',
+          'No pudimos limpiar tu sesion local. Intenta nuevamente.',
         ),
       };
     }
 
-    setIsPasswordRecovery(false);
-    return { error: null };
-  }, []);
+    return { error: backendError };
+  }, [clearAuthMe, session?.access_token]);
 
   const resetPassword = useCallback(async (email: string): Promise<AuthActionResult> => {
     const { error } = await supabase.auth.resetPasswordForEmail(normalizeEmail(email), {
@@ -383,6 +522,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       user,
       loading,
       initialized,
+      authMe,
+      authMeLoading,
+      authMeError,
       isPasswordRecovery,
       pendingJoinToken,
       signIn,
@@ -391,6 +533,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       resetPassword,
       updatePassword,
       refreshSession,
+      refetchMe,
       handleIncomingUrl,
       clearPasswordRecovery,
       clearPendingJoinToken,
@@ -399,10 +542,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       clearPasswordRecovery,
       clearPendingJoinToken,
       handleIncomingUrl,
+      authMe,
+      authMeError,
+      authMeLoading,
       initialized,
       isPasswordRecovery,
       loading,
       pendingJoinToken,
+      refetchMe,
       refreshSession,
       resetPassword,
       session,

@@ -10,6 +10,11 @@ const morgan = require('morgan');
 // 3. Importar tus rutas de la carpeta src
 const authRoutes = require('./src/routes/auth'); 
 const householdsRoutes = require('./src/routes/households');
+const {
+  householdInviteLinksRouter,
+  householdJoinRequestsRouter,
+  inviteLinksRouter,
+} = require('./src/routes/inviteLinks');
 const invitationsRoutes = require('./src/routes/invitations');
 const usersRoutes = require('./src/routes/users');
 
@@ -23,6 +28,9 @@ app.use(express.json()); // Crucial para recibir datos de Thunder Client
 
 // 5. Conectar rutas
 app.use('/api/auth', authRoutes);
+app.use('/api/invite-links', inviteLinksRouter);
+app.use('/api/households/:household_id/join-requests', householdJoinRequestsRouter);
+app.use('/api/households/:household_id/invite-links', householdInviteLinksRouter);
 app.use('/api/households', householdsRoutes);
 app.use('/households', householdsRoutes);
 app.use('/api/invitations', invitationsRoutes);

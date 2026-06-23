@@ -1,9 +1,13 @@
 const express = require('express')
-const authMiddleware = require('../middleware/authMiddleware')
-const householdsController = require('../controllers/households.controller')
 
 const router = express.Router()
 
-router.post('/validate', authMiddleware, householdsController.validateInvitation)
+const legacyInvitationFlowDisabled = (req, res) =>
+  res.status(410).json({
+    error: 'legacy_invitation_flow_disabled',
+    message: 'Legacy invitations flow is disabled. Use invite links flow.',
+  })
+
+router.post('/validate', legacyInvitationFlowDisabled)
 
 module.exports = router

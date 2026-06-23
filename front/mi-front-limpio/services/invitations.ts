@@ -1,92 +1,149 @@
 import { supabase } from '../supabase';
-import type { HouseholdMember } from './households';
+import {
+  ApiError,
+  approveJoinRequest as approveJoinRequestRequest,
+  createInviteLink as createInviteLinkRequest,
+  joinByToken as joinByTokenRequest,
+  listJoinRequests as listJoinRequestsRequest,
+  rejectJoinRequest as rejectJoinRequestRequest,
+  revokeInviteLink as revokeInviteLinkRequest,
+  type AuthMeMembership,
+  type InviteLink,
+  type JoinRequest,
+} from './api';
 
-export type Invitation = {
-  id: string;
-  household_id: string;
-  token: string;
-  rol_asignado: HouseholdMember['rol'];
-  created_by: string;
-  expires_at: string;
-  used_at: string | null;
-  used_by: string | null;
+export type Invitation = InviteLink;
+export type PendingRole = 'adult' | 'adolescent' | 'child' | 'senior' | 'guest';
+
+const getAccessToken = async (): Promise<string | null> => {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return null;
+  return data.session?.access_token ?? null;
 };
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+  error instanceof ApiError ? error.message : fallback;
 
 export async function createInvitation(
   householdId: string,
-  rolAsignado: HouseholdMember['rol'],
-  createdBy: string,
 ): Promise<{ invitation: Invitation | null; error: string | null }> {
-  const { data, error } = await supabase
-    .from('invitations')
-    .insert({
-      household_id: householdId,
-      rol_asignado: rolAsignado,
-      created_by: createdBy,
-    })
-    .select()
-    .single();
+  const accessToken = await getAccessToken();
 
-  if (error || !data) {
-    return { invitation: null, error: 'No pudimos generar la invitación. Intenta nuevamente.' };
+  if (!accessToken) {
+    return { invitation: null, error: 'Tu sesion expiro. Inicia sesion nuevamente.' };
   }
 
-  return { invitation: data as Invitation, error: null };
-}
-
-export async function getPendingInvitations(
-  householdId: string,
-): Promise<{ invitations: Invitation[]; error: string | null }> {
-  const { data, error } = await supabase
-    .from('invitations')
-    .select('*')
-    .eq('household_id', householdId)
-    .is('used_at', null)
-    .gt('expires_at', new Date().toISOString())
-    .order('expires_at', { ascending: true });
-
-  if (error) {
-    return { invitations: [], error: 'No pudimos cargar las invitaciones.' };
+  try {
+    const response = await createInviteLinkRequest(accessToken, householdId);
+    return { invitation: response.invite_link, error: null };
+  } catch (error) {
+    return {
+      invitation: null,
+      error: getErrorMessage(error, 'No pudimos generar el enlace. Intenta nuevamente.'),
+    };
   }
-
-  return { invitations: (data as Invitation[]) ?? [], error: null };
 }
 
 export async function revokeInvitation(
+  householdId: string,
   invitationId: string,
-): Promise<{ error: string | null }> {
-  const { error } = await supabase
-    .from('invitations')
-    .delete()
-    .eq('id', invitationId)
-    .is('used_at', null);
+): Promise<{ invitation: Invitation | null; error: string | null }> {
+  const accessToken = await getAccessToken();
 
-  if (error) {
-    return { error: 'No pudimos revocar la invitación.' };
+  if (!accessToken) {
+    return { invitation: null, error: 'Tu sesion expiro. Inicia sesion nuevamente.' };
   }
 
-  return { error: null };
+  try {
+    const response = await revokeInviteLinkRequest(accessToken, householdId, invitationId);
+    return { invitation: response.invite_link, error: null };
+  } catch (error) {
+    return {
+      invitation: null,
+      error: getErrorMessage(error, 'No pudimos revocar el enlace. Intenta nuevamente.'),
+    };
+  }
 }
 
 export async function joinHouseholdByToken(
   token: string,
-  _userId: string, // kept for API compatibility — server uses auth.uid() internally
-): Promise<{ householdId: string | null; error: string | null }> {
-  // Use a SECURITY DEFINER RPC so the invitee (who has no household yet) can
-  // read the invitation, insert themselves, and mark it as used atomically —
-  // without needing direct SELECT/UPDATE access on the invitations table.
-  const { data, error } = await supabase
-    .rpc('join_household_by_token', { p_token: token });
+): Promise<{ membership: AuthMeMembership | null; error: string | null }> {
+  const accessToken = await getAccessToken();
 
-  if (error) {
-    return { householdId: null, error: 'No pudimos unirte al hogar. Intenta nuevamente.' };
+  if (!accessToken) {
+    return { membership: null, error: 'Tu sesion expiro. Inicia sesion nuevamente.' };
   }
 
-  const result = data as { household_id: string | null; rol: string | null; error: string | null };
+  try {
+    const response = await joinByTokenRequest(accessToken, token);
+    return { membership: response.join_request.membership, error: null };
+  } catch (error) {
+    return {
+      membership: null,
+      error: getErrorMessage(error, 'No pudimos enviar tu solicitud. Intenta nuevamente.'),
+    };
+  }
+}
 
-  if (result?.error) {
-    return { householdId: null, error: result.error };
+export async function listPendingJoinRequests(
+  householdId: string,
+): Promise<{ requests: JoinRequest[]; error: string | null }> {
+  const accessToken = await getAccessToken();
+
+  if (!accessToken) {
+    return { requests: [], error: 'Tu sesion expiro. Inicia sesion nuevamente.' };
   }
 
-  return { householdId: result?.household_id ?? null, error: null };
+  try {
+    const response = await listJoinRequestsRequest(accessToken, householdId);
+    return { requests: response.join_requests, error: null };
+  } catch (error) {
+    return {
+      requests: [],
+      error: getErrorMessage(error, 'No pudimos cargar las solicitudes. Intenta nuevamente.'),
+    };
+  }
+}
+
+export async function approvePendingJoinRequest(
+  householdId: string,
+  membershipId: string,
+  role: PendingRole,
+): Promise<{ membership: AuthMeMembership | null; error: string | null }> {
+  const accessToken = await getAccessToken();
+
+  if (!accessToken) {
+    return { membership: null, error: 'Tu sesion expiro. Inicia sesion nuevamente.' };
+  }
+
+  try {
+    const response = await approveJoinRequestRequest(accessToken, householdId, membershipId, role);
+    return { membership: response.membership, error: null };
+  } catch (error) {
+    return {
+      membership: null,
+      error: getErrorMessage(error, 'No pudimos aprobar la solicitud. Intenta nuevamente.'),
+    };
+  }
+}
+
+export async function rejectPendingJoinRequest(
+  householdId: string,
+  membershipId: string,
+): Promise<{ membership: AuthMeMembership | null; error: string | null }> {
+  const accessToken = await getAccessToken();
+
+  if (!accessToken) {
+    return { membership: null, error: 'Tu sesion expiro. Inicia sesion nuevamente.' };
+  }
+
+  try {
+    const response = await rejectJoinRequestRequest(accessToken, householdId, membershipId);
+    return { membership: response.membership, error: null };
+  } catch (error) {
+    return {
+      membership: null,
+      error: getErrorMessage(error, 'No pudimos rechazar la solicitud. Intenta nuevamente.'),
+    };
+  }
 }

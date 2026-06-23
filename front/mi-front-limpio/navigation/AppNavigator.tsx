@@ -2,7 +2,6 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
-import { useHousehold } from '../context/HouseholdContext';
 import type { AuthStackParamList, PrivateStackParamList } from './types';
 import { P00Splash } from '../screens/Splash';
 import { AuthLoadingScreen } from '../screens/AuthLoading';
@@ -20,7 +19,7 @@ const PrivateStack = createNativeStackNavigator<PrivateStackParamList>();
 
 /** Pantalla de error cuando no se pudo cargar el hogar (error de DB/red) */
 const HouseholdErrorScreen = () => {
-  const { reload } = useHousehold();
+  const { refetchMe } = useAuth();
   return (
     <View style={errStyles.container}>
       <Text style={errStyles.icon}>⚠️</Text>
@@ -29,8 +28,86 @@ const HouseholdErrorScreen = () => {
         Puede ser un problema de conexión o de configuración.{'\n'}
         Revisá tu conexión a internet e intentá de nuevo.
       </Text>
-      <TouchableOpacity style={errStyles.btn} onPress={() => void reload()}>
+      <TouchableOpacity style={errStyles.btn} onPress={() => void refetchMe()}>
         <Text style={errStyles.btnText}>Reintentar</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const AuthMeErrorScreen = () => {
+  const { authMeError, refetchMe } = useAuth();
+
+  return (
+    <View style={errStyles.container}>
+      <Text style={errStyles.icon}>!</Text>
+      <Text style={errStyles.title}>No pudimos cargar tu sesion</Text>
+      <Text style={errStyles.subtitle}>
+        {authMeError ?? 'Puede ser un problema de conexion o de configuracion.'}{'\n'}
+        Revisa tu conexion e intenta de nuevo.
+      </Text>
+      <TouchableOpacity style={errStyles.btn} onPress={() => void refetchMe()}>
+        <Text style={errStyles.btnText}>Reintentar</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const WaitingApprovalScreen = () => {
+  const { refetchMe, signOut } = useAuth();
+
+  return (
+    <View style={errStyles.container}>
+      <Text style={errStyles.icon}>...</Text>
+      <Text style={errStyles.title}>Esperando aprobacion</Text>
+      <Text style={errStyles.subtitle}>
+        Tu solicitud de ingreso fue enviada. Vas a poder entrar al hogar cuando el coordinator la apruebe.
+      </Text>
+      <TouchableOpacity style={errStyles.btn} onPress={() => void refetchMe()}>
+        <Text style={errStyles.btnText}>Actualizar</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={errStyles.secondaryBtn} onPress={() => void signOut()}>
+        <Text style={errStyles.secondaryBtnText}>Cerrar sesion o cambiar cuenta</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const HouseholdSelectionFallbackScreen = () => {
+  const { refetchMe, signOut } = useAuth();
+
+  return (
+    <View style={errStyles.container}>
+      <Text style={errStyles.icon}>...</Text>
+      <Text style={errStyles.title}>Elegir hogar</Text>
+      <Text style={errStyles.subtitle}>
+        Tu cuenta tiene membresia activa, pero todavia falta seleccionar o setear el hogar activo en frontend.
+      </Text>
+      <TouchableOpacity style={errStyles.btn} onPress={() => void refetchMe()}>
+        <Text style={errStyles.btnText}>Actualizar</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={errStyles.secondaryBtn} onPress={() => void signOut()}>
+        <Text style={errStyles.secondaryBtnText}>Cerrar sesion</Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+const AccessSuspendedFallbackScreen = () => {
+  const { refetchMe, signOut } = useAuth();
+
+  return (
+    <View style={errStyles.container}>
+      <Text style={errStyles.icon}>!</Text>
+      <Text style={errStyles.title}>Acceso suspendido</Text>
+      <Text style={errStyles.subtitle}>
+        Tu acceso al hogar no esta activo. Actualiza el estado o inicia sesion con otra cuenta.
+      </Text>
+      <TouchableOpacity style={errStyles.btn} onPress={() => void refetchMe()}>
+        <Text style={errStyles.btnText}>Actualizar</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={errStyles.secondaryBtn} onPress={() => void signOut()}>
+        <Text style={errStyles.secondaryBtnText}>Cerrar sesion</Text>
       </TouchableOpacity>
     </View>
   );
@@ -43,17 +120,47 @@ const errStyles = StyleSheet.create({
   subtitle:  { fontSize: 15, color: '#6B6B6B', textAlign: 'center', lineHeight: 22, marginBottom: 32 },
   btn:       { backgroundColor: '#CD7353', paddingVertical: 14, paddingHorizontal: 32, borderRadius: 12 },
   btnText:   { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  secondaryBtn: { marginTop: 14, paddingVertical: 12, paddingHorizontal: 24 },
+  secondaryBtnText: { color: '#6B6B6B', fontSize: 15, fontWeight: '600' },
 });
 
-const PrivateNavigator = () => {
-  const { currentHousehold, loading, householdError } = useHousehold();
-  const { pendingJoinToken } = useAuth();
+const getInitialPrivateRoute = (
+  authMe: ReturnType<typeof useAuth>['authMe'],
+): keyof PrivateStackParamList => {
+  const next = authMe?.navigation?.next;
 
-  if (loading) return <AuthLoadingScreen />;
+  if (authMe?.active_household && (next === 'home' || next === 'household_onboarding')) {
+    return 'HomeTabs';
+  }
+
+  if (next === 'pending_approval') {
+    return 'PendingApprovalFallback';
+  }
+
+  if (next === 'access_suspended') {
+    return 'AccessSuspendedFallback';
+  }
+
+  if (
+    next === 'select_household'
+    || next === 'set_active_household'
+    || next === 'repair_active_household'
+  ) {
+    return 'HouseholdSelectionFallback';
+  }
+
+  return 'P02CrearGrupo';
+};
+
+const PrivateNavigator = () => {
+  const { authMe, authMeLoading, authMeError, pendingJoinToken } = useAuth();
+  const initialPrivateRoute = getInitialPrivateRoute(authMe);
+
+  if (authMeLoading || (!authMe && !authMeError)) return <AuthLoadingScreen />;
 
   // Error real cargando el hogar (no es "sin hogar") — mostrar pantalla de reintento
-  if (householdError) {
-    return <HouseholdErrorScreen />;
+  if (authMeError) {
+    return <AuthMeErrorScreen />;
   }
 
   // Pending join token takes priority: process the invitation before anything else
@@ -66,6 +173,9 @@ const PrivateNavigator = () => {
           initialParams={{ token: pendingJoinToken }}
         />
         <PrivateStack.Screen name="HomeTabs" component={HomeTabNavigator} />
+        <PrivateStack.Screen name="PendingApprovalFallback" component={WaitingApprovalScreen} />
+        <PrivateStack.Screen name="HouseholdSelectionFallback" component={HouseholdSelectionFallbackScreen} />
+        <PrivateStack.Screen name="AccessSuspendedFallback" component={AccessSuspendedFallbackScreen} />
       </PrivateStack.Navigator>
     );
   }
@@ -76,13 +186,17 @@ const PrivateNavigator = () => {
   // post-creación permanezca en P03InvitarPersonas sin ser pisado.
   return (
     <PrivateStack.Navigator
+      key={initialPrivateRoute}
       screenOptions={{ headerShown: false }}
-      initialRouteName={currentHousehold ? 'HomeTabs' : 'P02CrearGrupo'}
+      initialRouteName={initialPrivateRoute}
     >
       <PrivateStack.Screen name="HomeTabs" component={HomeTabNavigator} />
       <PrivateStack.Screen name="P02CrearGrupo" component={P02CrearGrupo} />
       <PrivateStack.Screen name="P03InvitarPersonas" component={P03InvitarPersonas} />
       <PrivateStack.Screen name="JoinHousehold" component={JoinHouseholdScreen} />
+      <PrivateStack.Screen name="PendingApprovalFallback" component={WaitingApprovalScreen} />
+      <PrivateStack.Screen name="HouseholdSelectionFallback" component={HouseholdSelectionFallbackScreen} />
+      <PrivateStack.Screen name="AccessSuspendedFallback" component={AccessSuspendedFallbackScreen} />
     </PrivateStack.Navigator>
   );
 };

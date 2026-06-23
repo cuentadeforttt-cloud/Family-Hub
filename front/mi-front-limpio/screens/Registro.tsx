@@ -67,9 +67,9 @@ export const P01Registro = ({ navigation }: Props) => {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 8) {
       setSuccessMessage(null);
-      setErrorMessage('La contrasena debe tener al menos 6 caracteres.');
+      setErrorMessage('La contrasena debe tener al menos 8 caracteres.');
       return;
     }
 
@@ -157,7 +157,7 @@ export const P01Registro = ({ navigation }: Props) => {
         <AuthTextInput
           ref={passwordInputRef}
           label="Contrasena"
-          placeholder="Minimo 6 caracteres"
+          placeholder="Minimo 8 caracteres"
           isPasswordField
           autoCapitalize="none"
           autoCorrect={false}

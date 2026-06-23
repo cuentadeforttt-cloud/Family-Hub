@@ -19,7 +19,7 @@ type Status = 'loading' | 'success' | 'error';
 
 export const JoinHouseholdScreen = ({ route }: Props) => {
   const { token } = route.params;
-  const { user, clearPendingJoinToken } = useAuth();
+  const { user, clearPendingJoinToken, refetchMe } = useAuth();
   const { reload } = useHousehold();
 
   const [status, setStatus] = useState<Status>('loading');
@@ -31,7 +31,7 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
     didRun.current = true;
 
     const processJoin = async () => {
-      const { error } = await joinHouseholdByToken(token, user.id);
+      const { error } = await joinHouseholdByToken(token);
 
       if (error) {
         setErrorMessage(error);
@@ -43,6 +43,7 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
       }
 
       await clearPendingJoinToken();
+      await refetchMe();
       await reload();
       // Navigation resolves automatically: PrivateNavigator re-renders
       // because pendingJoinToken is now null and currentHousehold is set.
@@ -55,6 +56,7 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
   const handleDismissError = async () => {
     // clearPendingJoinToken already called on error, just trigger household reload
     // so PrivateNavigator can decide where to send the user.
+    await refetchMe();
     await reload();
   };
 
@@ -75,8 +77,8 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
           <Text style={styles.successEmoji}>🏠</Text>
-          <Text style={styles.successTitle}>¡Te uniste al hogar!</Text>
-          <Text style={styles.successSubtitle}>Preparando tu experiencia personalizada...</Text>
+          <Text style={styles.successTitle}>Solicitud enviada</Text>
+          <Text style={styles.successSubtitle}>El coordinador tiene que aprobar tu acceso.</Text>
           <ActivityIndicator size="small" color="#7C9E7A" style={{ marginTop: 20 }} />
         </View>
       </SafeAreaView>

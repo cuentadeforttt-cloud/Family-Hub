@@ -1,0 +1,14 @@
+env: load .env
+env: export EXPO_PUBLIC_API_URL EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY
+Starting project at C:\Users\thega\Desktop\HomePlus\front\mi-front-limpio
+Starting Metro Bundler
+Waiting on http://localhost:8082
+Logs for your project will appear below.
+Web .\index.ts ▓▓▓▓▓▓░░░░░░░░░░ 39.6% (20/36)
+Web .\index.ts ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 73.5% (103/213)
+Web .\index.ts ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 78.4% (494/558)
+Web Bundled 11899ms index.ts (750 modules)
+ LOG  [web] Logs will appear in the browser console
+Web .\index.ts ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 51ms index.ts (1 module)
+ LOG  [web] Logs will appear in the browser console

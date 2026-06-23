@@ -11,6 +11,9 @@ export type PrivateStackParamList = {
   P03InvitarPersonas: { householdId: string };
   HomeTabs: undefined;
   JoinHousehold: { token: string };
+  PendingApprovalFallback: undefined;
+  HouseholdSelectionFallback: undefined;
+  AccessSuspendedFallback: undefined;
 };
 
 export type HomeTabParamList = {

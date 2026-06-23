@@ -1,4 +1,5 @@
 import { supabase } from '../supabase';
+import { ApiError, createHousehold as createHouseholdRequest, type AuthMeHousehold } from './api';
 
 export type Household = {
   id: string;
@@ -23,6 +24,8 @@ export type HouseholdMember = {
   };
 };
 
+// LEGACY: helpers del modelo anterior public.users/user_id/rol.
+// No usarlos en flujos Auth/Onboarding nuevos; quedan solo para pantallas internas pendientes de migracion.
 /**
  * Asegura que exista una fila en public.users para el usuario autenticado.
  * Usa RPC SECURITY DEFINER para saltear RLS (necesario para cuentas creadas
@@ -71,6 +74,24 @@ async function guaranteePublicUser(): Promise<void> {
 }
 
 export async function createHousehold(
+  accessToken: string,
+  name: string,
+): Promise<{ household: AuthMeHousehold | null; error: string | null }> {
+  try {
+    const response = await createHouseholdRequest(accessToken, { name: name.trim() });
+    return { household: response.household, error: null };
+  } catch (error) {
+    return {
+      household: null,
+      error: error instanceof ApiError
+        ? error.message
+        : 'No pudimos crear el hogar. Intenta nuevamente.',
+    };
+  }
+}
+
+// LEGACY: reemplazado para el flujo visible por POST /api/households.
+async function createHouseholdLegacy(
   nombre: string,
   tipo: Household['tipo'],
   userId: string,

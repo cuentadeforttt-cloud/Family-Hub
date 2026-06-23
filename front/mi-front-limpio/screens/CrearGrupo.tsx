@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Keyboard,
   StyleSheet,
@@ -11,7 +11,6 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthScreenLayout } from '../components/AuthScreenLayout';
 import { useAuth } from '../context/AuthContext';
-import { useHousehold } from '../context/HouseholdContext';
 import { createHousehold } from '../services/households';
 import type { PrivateStackParamList } from '../navigation/types';
 
@@ -26,21 +25,26 @@ const FAMILY_TYPES: { id: FamilyType; icon: string; label: string }[] = [
   { id: 'otro',        icon: '✨',       label: 'Otro' },
 ];
 
+const extractJoinToken = (value: string) => {
+  const trimmed = value.trim();
+
+  if (!trimmed) return '';
+
+  const tokenMatch = trimmed.match(/[?&]token=([^&#]+)/);
+  if (tokenMatch?.[1]) {
+    return decodeURIComponent(tokenMatch[1]).trim();
+  }
+
+  return trimmed;
+};
+
 export const P02CrearGrupo = ({ navigation }: Props) => {
-  const { user, signOut } = useAuth();
-  const { reload, currentHousehold } = useHousehold();
+  const { session, user, signOut, refetchMe } = useAuth();
   const [nombreHogar, setNombreHogar] = useState('');
+  const [joinToken, setJoinToken] = useState('');
   const [tipoFamilia, setTipoFamilia] = useState<FamilyType>('nucleo');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  // Guard: si el contexto ya tiene un hogar (ej: reload post-creación o vuelta atrás),
-  // redirigir a HomeTabs para evitar creaciones duplicadas.
-  useEffect(() => {
-    if (currentHousehold) {
-      navigation.replace('HomeTabs');
-    }
-  }, [currentHousehold, navigation]);
 
   const handleCreate = async () => {
     Keyboard.dismiss();
@@ -50,12 +54,17 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
       return;
     }
 
-    if (!user) return;
+    const accessToken = session?.access_token;
+
+    if (!accessToken) {
+      setErrorMessage('Tu sesion expiro. Inicia sesion nuevamente.');
+      return;
+    }
 
     setLoading(true);
     setErrorMessage(null);
 
-    const { household, error } = await createHousehold(nombreHogar, tipoFamilia, user.id);
+    const { household, error } = await createHousehold(accessToken, nombreHogar);
 
     if (error || !household) {
       setErrorMessage(error ?? 'Error inesperado. Intenta nuevamente.');
@@ -63,17 +72,26 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
       return;
     }
 
-    // replace() antes de reload(): navigator todavía montado, referencia válida.
-    // replace en vez de navigate: el botón Atrás no vuelve a esta pantalla.
-    navigation.replace('P03InvitarPersonas', { householdId: household.id });
+    await refetchMe();
 
-    // reload en background: usa reloading (no loading), no desmonta el navigator.
-    void reload();
     setLoading(false);
   };
 
   const handleSignOut = async () => {
     await signOut();
+  };
+
+  const handleJoin = () => {
+    Keyboard.dismiss();
+    const token = extractJoinToken(joinToken);
+
+    if (!token) {
+      setErrorMessage('Pega el link o token de invitacion para unirte.');
+      return;
+    }
+
+    setErrorMessage(null);
+    navigation.navigate('JoinHousehold', { token });
   };
 
   return (
@@ -134,6 +152,36 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
             : <Text style={styles.primaryButtonText}>Crear hogar</Text>
           }
         </TouchableOpacity>
+
+        <View style={styles.separator}>
+          <View style={styles.separatorLine} />
+          <Text style={styles.separatorText}>o</Text>
+          <View style={styles.separatorLine} />
+        </View>
+
+        <Text style={styles.label}>Unirte a un hogar existente</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Pega aca tu link o token"
+          placeholderTextColor="#A3A3A3"
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="done"
+          editable={!loading}
+          value={joinToken}
+          onChangeText={(v) => { setErrorMessage(null); setJoinToken(v); }}
+          onSubmitEditing={handleJoin}
+        />
+
+        <TouchableOpacity
+          style={[styles.secondaryButton, loading && styles.buttonDisabled]}
+          onPress={handleJoin}
+          disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Unirme con invitacion"
+        >
+          <Text style={styles.secondaryButtonText}>Unirme con invitacion</Text>
+        </TouchableOpacity>
       </View>
     </AuthScreenLayout>
   );
@@ -181,5 +229,20 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
+  separator: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
+  separatorLine: { flex: 1, height: 1, backgroundColor: '#E2DFD6' },
+  separatorText: { marginHorizontal: 14, color: '#888888', fontSize: 13, fontWeight: '600' },
+  secondaryButton: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    borderWidth: 1.5,
+    borderColor: '#CD7353',
+  },
+  secondaryButtonText: { color: '#CD7353', fontSize: 16, fontWeight: '700' },
   buttonDisabled: { opacity: 0.6 },
 });

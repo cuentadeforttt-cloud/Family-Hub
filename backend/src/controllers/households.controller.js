@@ -1,12 +1,15 @@
 const { randomUUID } = require('crypto')
-const { supabase } = require('../config/supabase')
+const { createSupabaseForToken, supabase } = require('../config/supabase')
+const { buildMe } = require('../lib/me.service')
 
 const COORDINATOR_ROLE = 'coordinador'
-const VALID_HOUSEHOLD_TYPES = new Set(['nucleo', 'abuelos', 'separados'])
+const DEFAULT_TIMEZONE = 'America/Argentina/Buenos_Aires'
+const DEFAULT_LANGUAGE = 'es-419'
 
-const createHttpError = (statusCode, message) => {
+const createHttpError = (statusCode, message, code) => {
   const error = new Error(message)
   error.statusCode = statusCode
+  error.code = code
   return error
 }
 
@@ -29,14 +32,6 @@ const isMissingOptionalColumnError = (error, columnName) => {
   const message = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`.toLowerCase()
 
   return error?.code === 'PGRST204' || message.includes(`'${columnName.toLowerCase()}'`)
-}
-
-const safeDeleteHousehold = async (householdId) => {
-  if (!householdId) {
-    return
-  }
-
-  await supabase.from('households').delete().eq('id', householdId)
 }
 
 const safeDeleteHouseholdMember = async (householdId, userId) => {
@@ -102,69 +97,84 @@ const insertInvitation = async (payload) => {
   return supabase.from('invitations').insert(withoutCreator).select('*').single()
 }
 
+const isPlainObject = (value) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+
+const mapCreateHouseholdRpcError = (error) => {
+  const message = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`
+
+  if (error?.code === '22023' || message.includes('household_name_required')) {
+    return createHttpError(400, 'name es obligatorio.', 'household/invalid_name')
+  }
+
+  if (message.includes('person_not_found')) {
+    return createHttpError(409, 'No existe people para el usuario autenticado.', 'auth/person_not_found')
+  }
+
+  if (error?.code === '28000' || message.includes('not_authenticated')) {
+    return createHttpError(401, 'No autenticado.', 'auth/unauthorized')
+  }
+
+  if (error?.code === '23505' || message.includes('household_slug_conflict')) {
+    return createHttpError(409, 'El slug del hogar ya existe.', 'household/slug_conflict')
+  }
+
+  return createHttpError(500, 'No se pudo crear el hogar.', 'household/create_failed')
+}
+
 const createHousehold = async (req, res) => {
   try {
-    const userId = req.user?.id
-    const nombre = normalizeString(req.body?.nombre)
-    const tipo = normalizeString(req.body?.tipo).toLowerCase()
+    const accessToken = req.accessToken
+    const user = req.user
+    const name = normalizeString(req.body?.name)
+    const slug = normalizeString(req.body?.slug) || null
+    const timezone = normalizeString(req.body?.timezone) || DEFAULT_TIMEZONE
+    const defaultLanguage = normalizeString(req.body?.default_language) || DEFAULT_LANGUAGE
+    const config = req.body?.config ?? {}
 
-    if (!userId) {
-      return res.status(401).json({ error: 'Token invalido o expirado' })
+    if (!accessToken || !user?.id) {
+      throw createHttpError(401, 'No autenticado.', 'auth/unauthorized')
     }
 
-    if (!nombre) {
-      throw createHttpError(400, 'nombre es obligatorio.')
+    if (!name) {
+      throw createHttpError(400, 'name es obligatorio.', 'household/invalid_name')
     }
 
-    if (!tipo || !VALID_HOUSEHOLD_TYPES.has(tipo)) {
-      throw createHttpError(400, 'tipo invalido.')
+    if (!isPlainObject(config)) {
+      throw createHttpError(400, 'config debe ser un objeto JSON.', 'household/invalid_config')
     }
 
-    const householdResult = await supabase
-      .from('households')
-      .insert({
-        nombre,
-        tipo,
-        created_by: userId,
-      })
-      .select('*')
-      .single()
+    const scopedClient = createSupabaseForToken(accessToken)
+    const { data, error } = await scopedClient.rpc('create_household', {
+      p_name: name,
+      p_slug: slug,
+      p_timezone: timezone,
+      p_default_language: defaultLanguage,
+      p_config: config,
+    })
 
-    if (householdResult.error || !householdResult.data) {
-      if (isDbValidationError(householdResult.error)) {
-        throw createHttpError(400, 'tipo invalido.')
-      }
-
-      throw createHttpError(500, householdResult.error?.message ?? 'No se pudo crear el hogar.')
+    if (error) {
+      throw mapCreateHouseholdRpcError(error)
     }
 
-    const household = householdResult.data
-
-    const memberResult = await supabase
-      .from('household_members')
-      .insert({
-        household_id: household.id,
-        user_id: userId,
-        rol: COORDINATOR_ROLE,
-      })
-      .select('*')
-      .single()
-
-    if (memberResult.error || !memberResult.data) {
-      await safeDeleteHousehold(household.id)
-      throw createHttpError(
-        500,
-        memberResult.error?.message ?? 'No se pudo crear la membresia del coordinador.',
-      )
+    if (!data?.household || !data?.membership || !data?.person) {
+      throw createHttpError(500, 'No se pudo crear el hogar.', 'household/create_failed')
     }
+
+    const me = await buildMe({ user, accessToken })
 
     return res.status(201).json({
-      hogar: household,
-      member: memberResult.data,
+      household: data.household,
+      membership: data.membership,
+      person: data.person,
+      me,
     })
   } catch (error) {
-    return res.status(error.statusCode ?? 500).json({
-      error: error.message ?? 'Error inesperado al crear el hogar.',
+    const statusCode = error.statusCode ?? 500
+
+    return res.status(statusCode).json({
+      error: statusCode >= 500 ? 'No se pudo crear el hogar.' : error.message,
+      code: statusCode >= 500 ? 'household/create_failed' : error.code,
     })
   }
 }
