@@ -12,7 +12,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
-import { getMyTodayEvents, type CalendarEvent } from '../../services/events';
+import { HomePlannerSections } from './HomePlannerSections';
+
+type CalendarEvent = any;
 
 const CATEGORY_ICONS: Record<string, string> = {
   salud: '💊', trabajo: '💼', escuela: '📚', familia: '🏠',
@@ -61,8 +63,7 @@ export const HomeAdultoMayor = () => {
   const fetchData = useCallback(async () => {
     if (!currentHousehold || !user) return;
     setEventsLoading(true);
-    const { events } = await getMyTodayEvents(currentHousehold.id, user.id);
-    setTodayEvents(events);
+    setTodayEvents([]);
     setEventsLoading(false);
   }, [currentHousehold, user]);
 
@@ -108,6 +109,8 @@ export const HomeAdultoMayor = () => {
           </View>
         </View>
 
+        <HomePlannerSections />
+
         {/* "Estoy bien" button */}
         <TouchableOpacity
           style={[styles.wellbeingBtn, checkedIn && styles.wellbeingBtnDone]}
@@ -120,6 +123,8 @@ export const HomeAdultoMayor = () => {
         </TouchableOpacity>
         <Text style={styles.lastCheckin}>Ayer a las 8:32 AM ✓</Text>
 
+        {false ? (
+          <>
         {/* Appointments / events today */}
         <Text style={styles.sectionTitle}>📋 Hoy</Text>
         {eventsLoading ? (
@@ -140,6 +145,9 @@ export const HomeAdultoMayor = () => {
             </View>
           </View>
         ))}
+
+          </>
+        ) : null}
 
         {/* Family photos */}
         <Text style={styles.sectionTitle}>📷 Fotos de tu familia</Text>

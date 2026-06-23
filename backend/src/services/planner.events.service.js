@@ -4,6 +4,12 @@ const { EVENT_RECURRENCES } = require('../constants/planner.constants')
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '')
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object ?? {}, key)
 const isTrueQuery = (value) => value === true || value === 'true' || value === '1'
+const throwSupabaseError = (error) => {
+  const httpError = createHttpError(500, error.message, error.code ?? 'internal_error')
+  httpError.details = error.details
+  httpError.hint = error.hint
+  throw httpError
+}
 
 const addDays = (date, days) => {
   const copy = new Date(date)
@@ -67,7 +73,7 @@ const getEventOrThrow = async (client, householdId, eventId) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   if (!data) {
@@ -109,7 +115,7 @@ const listEvents = async (context, query) => {
   const { data, error } = await request.limit(500)
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   const events = (data ?? [])
@@ -156,7 +162,7 @@ const createEvent = async (context, body) => {
     .single()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   return { event: data }
@@ -229,7 +235,7 @@ const updateEvent = async (context, eventId, body) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   if (!data) {
@@ -251,7 +257,7 @@ const cancelEvent = async (context, eventId) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   return { event: data }

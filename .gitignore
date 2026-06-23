@@ -1,0 +1,6 @@
+
+# Local/generated files
+front/mi-front-limpio/.env
+.codex-*.log
+supabase/_pulled_backups/
+

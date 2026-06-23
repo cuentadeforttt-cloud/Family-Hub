@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -9,14 +9,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
-import { getHouseholdTasks, completeTask as completeTaskService, type Task } from '../../services/tasks';
-import { getTodayEvents, type CalendarEvent } from '../../services/events';
-import type { PrivateStackParamList } from '../../navigation/types';
+import { HomePlannerSections } from './HomePlannerSections';
 
-const PRIORITY_COLORS = { alta: '#DC2626', media: '#F59E0B', baja: '#22C55E' } as const;
+type Task = any;
+type CalendarEvent = any;
+
+const PRIORITY_COLORS: Record<string, string> = { alta: '#DC2626', media: '#F59E0B', baja: '#22C55E' };
 
 const ROL_EMOJI: Record<string, string> = {
   coordinador: '👑', adulto: '👤', adolescente: '🎮', adulto_mayor: '🌟',
@@ -86,14 +86,29 @@ function DailyBriefing({ eventCount, taskCount }: { eventCount: number; taskCoun
 }
 
 function QuickActions({ householdId }: { householdId: string }) {
-  const navigation = useNavigation<NativeStackNavigationProp<PrivateStackParamList>>();
+  const navigation = useNavigation<any>();
+
+  const openPlanner = (initialTab: 'tasks' | 'calendar', initialSheet: 'task' | 'event') => {
+    navigation.navigate('PlannerTab', {
+      screen: 'PlannerHome',
+      params: { initialTab, initialSheet, sheetKey: Date.now(), refreshKey: Date.now() },
+    });
+  };
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsScroll}>
-      <TouchableOpacity style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]} accessibilityRole="button">
+      <TouchableOpacity
+        style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]}
+        accessibilityRole="button"
+        onPress={() => openPlanner('tasks', 'task')}
+      >
         <Text style={styles.actionText}>+ Tarea</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]} accessibilityRole="button">
+      <TouchableOpacity
+        style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]}
+        accessibilityRole="button"
+        onPress={() => openPlanner('calendar', 'event')}
+      >
         <Text style={styles.actionText}>+ Evento</Text>
       </TouchableOpacity>
       <TouchableOpacity
@@ -210,32 +225,9 @@ export const HomeCoordinador = () => {
   const { user } = useAuth();
   const { currentHousehold } = useHousehold();
 
-  const [todayEvents, setTodayEvents] = useState<CalendarEvent[]>([]);
-  const [pendingTasks, setPendingTasks] = useState<Task[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
-
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Buenos días' : hour < 18 ? 'Buenas tardes' : 'Buenas noches';
   const firstName = user?.user_metadata?.nombre?.split(' ')[0] ?? 'Coordinador';
-
-  const fetchData = useCallback(async () => {
-    if (!currentHousehold) return;
-    setDataLoading(true);
-    const [evResult, taskResult] = await Promise.all([
-      getTodayEvents(currentHousehold.id),
-      getHouseholdTasks(currentHousehold.id, 'pendiente'),
-    ]);
-    setTodayEvents(evResult.events);
-    setPendingTasks(taskResult.tasks);
-    setDataLoading(false);
-  }, [currentHousehold]);
-
-  useEffect(() => { void fetchData(); }, [fetchData]);
-
-  const handleCompleteTask = async (taskId: string) => {
-    await completeTaskService(taskId);
-    setPendingTasks(prev => prev.filter(t => t.id !== taskId));
-  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -258,11 +250,9 @@ export const HomeCoordinador = () => {
         )}
 
         <FamilyPulse />
-        <DailyBriefing eventCount={todayEvents.length} taskCount={pendingTasks.length} />
+        <DailyBriefing eventCount={0} taskCount={0} />
         {currentHousehold && <QuickActions householdId={currentHousehold.id} />}
-        <Timeline events={todayEvents} loading={dataLoading} />
-        <View style={{ height: 20 }} />
-        <PendingTasks tasks={pendingTasks} loading={dataLoading} onComplete={id => void handleCompleteTask(id)} />
+        <HomePlannerSections variant="dark" />
         <View style={{ height: 20 }} />
         <BudgetCard />
         <View style={{ height: 40 }} />

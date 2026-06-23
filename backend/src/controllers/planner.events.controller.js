@@ -1,11 +1,33 @@
 const { getPlannerContext } = require('../services/planner.context.service')
 const eventsService = require('../services/planner.events.service')
 
-const sendPlannerError = (res, error) =>
-  res.status(error.statusCode ?? 500).json({
-    error: error.statusCode && error.statusCode < 500 ? error.message : 'Error interno.',
+const sendPlannerError = (res, error) => {
+  const statusCode = error.statusCode ?? 500
+
+  if (statusCode >= 500) {
+    console.error('[planner.events]', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      stack: error.stack,
+    })
+  }
+
+  return res.status(statusCode).json({
+    error: statusCode < 500 ? error.message : 'Error interno.',
     code: error.code ?? 'internal_error',
+    ...(process.env.NODE_ENV !== 'production' && statusCode >= 500
+      ? {
+          debug: {
+            message: error.message,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+          },
+        }
+      : {}),
   })
+}
 
 const listEvents = async (req, res) => {
   try {

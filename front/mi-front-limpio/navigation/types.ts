@@ -18,10 +18,23 @@ export type PrivateStackParamList = {
 
 export type HomeTabParamList = {
   HomeTab: undefined;
-  CalendarTab: undefined;
-  FeedTab: undefined;
-  InventarioTab: undefined;
-  ProfileTab: undefined;
+  PeopleTab: undefined;
+  AddTab: undefined;
+  PlannerTab: undefined;
+  MoreTab: undefined;
+};
+
+export type PlannerStackParamList = {
+  PlannerHome: {
+    refreshKey?: number;
+    initialTab?: 'tasks' | 'calendar' | 'goals';
+    initialSheet?: 'task' | 'event';
+    sheetKey?: number;
+  } | undefined;
+  CreateTask: undefined;
+  EditTask: { taskId: string };
+  CreateEvent: undefined;
+  EditEvent: { eventId: string };
 };
 
 export type RootStackParamList = AuthStackParamList & PrivateStackParamList;

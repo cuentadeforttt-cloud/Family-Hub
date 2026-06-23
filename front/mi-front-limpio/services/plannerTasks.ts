@@ -1,0 +1,131 @@
+import { requestJson } from './api';
+
+export type PlannerTaskStatus =
+  | 'pending'
+  | 'completed'
+  | 'awaiting_verification'
+  | 'verified'
+  | 'cancelled';
+
+export type PlannerTaskPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export type PlannerTaskTemplateKey =
+  | 'cleaning'
+  | 'shopping'
+  | 'pets'
+  | 'medication'
+  | 'studies'
+  | 'payments';
+
+export type PlannerTask = {
+  id: string;
+  household_id: string;
+  title: string;
+  description?: string | null;
+  status: PlannerTaskStatus;
+  priority: PlannerTaskPriority;
+  template_key?: PlannerTaskTemplateKey | null;
+  category?: string | null;
+  due_date?: string | null;
+  due_time?: string | null;
+  requires_verification: boolean;
+  created_by_person_id: string;
+  assigned_to_member_id?: string | null;
+  completed_by_person_id?: string | null;
+  verified_by_person_id?: string | null;
+  completed_at?: string | null;
+  verified_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  assigned_member?: {
+    id: string;
+    person_id: string;
+    display_name?: string | null;
+    avatar_url?: string | null;
+    role?: string | null;
+  } | null;
+};
+
+export type CreatePlannerTaskPayload = {
+  title: string;
+  description?: string;
+  priority?: PlannerTaskPriority;
+  template_key?: PlannerTaskTemplateKey;
+  category?: string;
+  due_date?: string;
+  due_time?: string;
+  assigned_to_member_id?: string;
+  requires_verification?: boolean;
+};
+
+export type UpdatePlannerTaskPayload = Partial<CreatePlannerTaskPayload>;
+
+export type PlannerTaskFilters = {
+  status?: PlannerTaskStatus;
+  assigned_to_member_id?: string;
+  from?: string;
+  to?: string;
+  template_key?: PlannerTaskTemplateKey;
+  include_cancelled?: boolean;
+  limit?: number;
+};
+
+type PlannerTaskResponse = {
+  task: PlannerTask;
+};
+
+type PlannerTasksResponse = {
+  tasks: PlannerTask[];
+};
+
+const toQueryString = (filters?: PlannerTaskFilters) => {
+  const params = new URLSearchParams();
+
+  Object.entries(filters ?? {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      params.append(key, String(value));
+    }
+  });
+
+  const query = params.toString();
+  return query ? `?${query}` : '';
+};
+
+export const listPlannerTasks = (accessToken: string, filters?: PlannerTaskFilters) =>
+  requestJson<PlannerTasksResponse>(`/api/planner/tasks${toQueryString(filters)}`, { accessToken });
+
+export const createPlannerTask = (accessToken: string, payload: CreatePlannerTaskPayload) =>
+  requestJson<PlannerTaskResponse>('/api/planner/tasks', {
+    method: 'POST',
+    accessToken,
+    body: payload,
+  });
+
+export const updatePlannerTask = (
+  accessToken: string,
+  taskId: string,
+  payload: UpdatePlannerTaskPayload,
+) =>
+  requestJson<PlannerTaskResponse>(`/api/planner/tasks/${taskId}`, {
+    method: 'PATCH',
+    accessToken,
+    body: payload,
+  });
+
+export const cancelPlannerTask = (accessToken: string, taskId: string) =>
+  requestJson<PlannerTaskResponse>(`/api/planner/tasks/${taskId}`, {
+    method: 'DELETE',
+    accessToken,
+  });
+
+export const completePlannerTask = (accessToken: string, taskId: string) =>
+  requestJson<PlannerTaskResponse>(`/api/planner/tasks/${taskId}/complete`, {
+    method: 'POST',
+    accessToken,
+  });
+
+export const verifyPlannerTask = (accessToken: string, taskId: string) =>
+  requestJson<PlannerTaskResponse>(`/api/planner/tasks/${taskId}/verify`, {
+    method: 'POST',
+    accessToken,
+  });

@@ -7,6 +7,12 @@ const {
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '')
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object ?? {}, key)
+const throwSupabaseError = (error) => {
+  const httpError = createHttpError(500, error.message, error.code ?? 'internal_error')
+  httpError.details = error.details
+  httpError.hint = error.hint
+  throw httpError
+}
 
 const isValidDateOnly = (value) =>
   typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`))
@@ -106,7 +112,7 @@ const validateAssignment = async (client, householdId, assignedToMemberId) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   if (!data) {
@@ -162,7 +168,7 @@ const getTaskOrThrow = async (client, householdId, taskId) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   if (!data) {
@@ -212,7 +218,7 @@ const listTasks = async (context, query) => {
   const { data, error } = await request.limit(500)
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   const sorted = sortTasks(data ?? []).slice(0, limit)
@@ -255,7 +261,7 @@ const createTask = async (context, body) => {
     .single()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   return { task: data }
@@ -334,7 +340,7 @@ const updateTask = async (context, taskId, body) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   if (!data) {
@@ -356,7 +362,7 @@ const cancelTask = async (context, taskId) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   return { task: data }
@@ -384,7 +390,7 @@ const completeTask = async (context, taskId) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   return { task: data }
@@ -414,7 +420,7 @@ const verifyTask = async (context, taskId) => {
     .maybeSingle()
 
   if (error) {
-    throw createHttpError(500, error.message, 'internal_error')
+    throwSupabaseError(error)
   }
 
   return { task: data }

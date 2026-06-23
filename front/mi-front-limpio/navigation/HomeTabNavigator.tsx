@@ -1,38 +1,57 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, Text, View } from 'react-native';
-import type { HomeTabParamList } from './types';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ActivityIndicator, Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { HomeTabParamList, PlannerStackParamList } from './types';
 import { useHousehold } from '../context/HouseholdContext';
 import { HomeCoordinador } from '../screens/home/HomeCoordinador';
 import { HomeAdulto } from '../screens/home/HomeAdulto';
 import { HomeAdolescente } from '../screens/home/HomeAdolescente';
 import { HomeAdultoMayor } from '../screens/home/HomeAdultoMayor';
-import { CalendarScreen } from '../screens/calendar/CalendarScreen';
-import { FeedFamiliarScreen } from '../screens/feed/FeedFamiliarScreen';
-import { InventarioScreen } from '../screens/inventory/InventarioScreen';
+import { FamilyScreen } from '../screens/FamilyScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { PlannerScreen } from '../screens/planner/PlannerScreen';
+import { CreateTaskScreen } from '../screens/planner/CreateTaskScreen';
+import { EditTaskScreen } from '../screens/planner/EditTaskScreen';
+import { CreateEventScreen } from '../screens/planner/CreateEventScreen';
+import { EditEventScreen } from '../screens/planner/EditEventScreen';
 
 const Tab = createBottomTabNavigator<HomeTabParamList>();
+const PlannerStack = createNativeStackNavigator<PlannerStackParamList>();
 
 const TabIcon = ({
-  icon,
+  mark,
   label,
   focused,
-  accentColor,
 }: {
-  icon: string;
+  mark: string;
   label: string;
   focused: boolean;
-  accentColor: string;
 }) => (
   <View style={{ alignItems: 'center', paddingTop: 6, minWidth: 48 }}>
-    <Text style={{ fontSize: 21 }}>{icon}</Text>
+    <Text
+      style={{
+        fontSize: 15,
+        width: 28,
+        height: 24,
+        borderRadius: 12,
+        textAlign: 'center',
+        lineHeight: 24,
+        overflow: 'hidden',
+        color: '#FFF8EA',
+        backgroundColor: focused ? 'rgba(255,248,234,0.22)' : 'transparent',
+        fontWeight: '900',
+      }}
+    >
+      {mark}
+    </Text>
     <Text
       style={{
         fontSize: 9,
         marginTop: 2,
         fontWeight: focused ? '700' : '400',
-        color: focused ? accentColor : '#888888',
+        color: focused ? '#FFF8EA' : 'rgba(255,248,234,0.76)',
       }}
     >
       {label}
@@ -43,7 +62,7 @@ const TabIcon = ({
           width: 4,
           height: 4,
           borderRadius: 2,
-          backgroundColor: accentColor,
+          backgroundColor: '#FFF8EA',
           marginTop: 2,
         }}
       />
@@ -72,20 +91,128 @@ function HomeScreen() {
   return <HomeCoordinador />;
 }
 
+function PlannerStackScreen() {
+  return (
+    <PlannerStack.Navigator screenOptions={{ headerShown: false }}>
+      <PlannerStack.Screen name="PlannerHome" component={PlannerScreen} />
+      <PlannerStack.Screen name="CreateTask" component={CreateTaskScreen} />
+      <PlannerStack.Screen name="EditTask" component={EditTaskScreen} />
+      <PlannerStack.Screen name="CreateEvent" component={CreateEventScreen} />
+      <PlannerStack.Screen name="EditEvent" component={EditEventScreen} />
+    </PlannerStack.Navigator>
+  );
+}
+
+function EmptyQuickActionScreen() {
+  return <View style={{ flex: 1, backgroundColor: '#F7F6F1' }} />;
+}
+
+function QuickAddTabButton() {
+  const navigation = useNavigation<any>();
+  const [visible, setVisible] = React.useState(false);
+
+  const openPlannerRoute = (initialTab: 'tasks' | 'calendar', initialSheet: 'task' | 'event') => {
+    setVisible(false);
+    navigation.navigate('PlannerTab', {
+      screen: 'PlannerHome',
+      params: {
+        initialTab,
+        initialSheet,
+        sheetKey: Date.now(),
+        refreshKey: Date.now(),
+      },
+    });
+  };
+
+  const showSoon = () => {
+    setVisible(false);
+    // Alert is intentionally avoided here to keep the tab button lightweight.
+    navigation.navigate('PlannerTab', {
+      screen: 'PlannerHome',
+      params: { initialTab: 'goals', refreshKey: Date.now() },
+    });
+  };
+
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center', top: -18 }}>
+      <TouchableOpacity
+        activeOpacity={0.82}
+        onPress={() => setVisible(true)}
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 32,
+          backgroundColor: '#FFF8EA',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 4,
+          borderColor: '#CD7353',
+          shadowColor: '#000',
+          shadowOpacity: 0.2,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: 8,
+        }}
+      >
+        <Text style={{ color: '#CD7353', fontSize: 34, fontWeight: '800', lineHeight: 38 }}>+</Text>
+      </TouchableOpacity>
+
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: 'rgba(23,32,26,0.36)', justifyContent: 'flex-end' }}
+          onPress={() => setVisible(false)}
+        >
+          <Pressable
+            style={{
+              backgroundColor: '#FFF8EA',
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              padding: 22,
+              paddingBottom: 34,
+              borderTopWidth: 1,
+              borderColor: '#E5D8C7',
+            }}
+          >
+            <Text style={{ color: '#17201A', fontSize: 22, fontWeight: '900', marginBottom: 4 }}>
+              Acciones rapidas
+            </Text>
+            <Text style={{ color: '#6E6254', fontSize: 14, marginBottom: 18 }}>
+              Crear en el Planner del hogar.
+            </Text>
+            <TouchableOpacity
+              activeOpacity={0.86}
+              style={{ backgroundColor: '#CD7353', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, marginBottom: 10 }}
+              onPress={() => openPlannerRoute('tasks', 'task')}
+            >
+              <Text style={{ color: '#FFF8EA', fontWeight: '900', fontSize: 16 }}>Crear tarea</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.86}
+              style={{ backgroundColor: '#FFFFFF', borderColor: '#CD7353', borderWidth: 1, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16 }}
+              onPress={() => openPlannerRoute('calendar', 'event')}
+            >
+              <Text style={{ color: '#CD7353', fontWeight: '900', fontSize: 16 }}>Crear evento</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.86}
+              style={{ backgroundColor: '#ECF3EA', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, marginTop: 10 }}
+              onPress={showSoon}
+            >
+              <Text style={{ color: '#496E47', fontWeight: '900', fontSize: 16 }}>Preguntar a Geni</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
 export function HomeTabNavigator() {
   const { currentRole } = useHousehold();
 
-  const isDark = currentRole === 'coordinador' || currentRole === 'adolescente';
   const isAdultoMayor = currentRole === 'adulto_mayor';
-
-  const accentColor =
-    currentRole === 'coordinador'   ? '#CD7353'
-    : currentRole === 'adolescente' ? '#6B4FE8'
-    : currentRole === 'adulto_mayor' ? '#D4975A'
-    : '#CD7353';
-
-  const tabBarBg     = isDark ? '#0D1117' : '#FFFFFF';
-  const tabBarBorder = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const tabBarBg = '#CD7353';
+  const tabBarBorder = 'rgba(255,248,234,0.18)';
   const tabBarHeight = isAdultoMayor ? 84 : 72;
 
   return (
@@ -109,10 +236,9 @@ export function HomeTabNavigator() {
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
-              icon="🏠"
-              label="Inicio"
+              label="Home"
               focused={focused}
-              accentColor={accentColor}
+              mark="H"
             />
           ),
         }}
@@ -120,15 +246,14 @@ export function HomeTabNavigator() {
 
       {/* 2 – Calendario */}
       <Tab.Screen
-        name="CalendarTab"
-        component={CalendarScreen}
+        name="PeopleTab"
+        component={FamilyScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
-              icon="📅"
-              label={isAdultoMayor ? 'Mi Día' : 'Calendario'}
+              label="People"
               focused={focused}
-              accentColor={accentColor}
+              mark="P"
             />
           ),
         }}
@@ -136,31 +261,24 @@ export function HomeTabNavigator() {
 
       {/* 3 – Feed Familiar */}
       <Tab.Screen
-        name="FeedTab"
-        component={FeedFamiliarScreen}
+        name="AddTab"
+        component={EmptyQuickActionScreen}
         options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              icon="📸"
-              label="Feed"
-              focused={focused}
-              accentColor={accentColor}
-            />
-          ),
+          tabBarButton: () => <QuickAddTabButton />,
         }}
+        listeners={{ tabPress: (event) => event.preventDefault() }}
       />
 
       {/* 4 – Inventario */}
       <Tab.Screen
-        name="InventarioTab"
-        component={InventarioScreen}
+        name="PlannerTab"
+        component={PlannerStackScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
-              icon="🛒"
-              label="Inventario"
+              label="Planner"
               focused={focused}
-              accentColor={accentColor}
+              mark="Pl"
             />
           ),
         }}
@@ -168,15 +286,14 @@ export function HomeTabNavigator() {
 
       {/* 5 – Perfil */}
       <Tab.Screen
-        name="ProfileTab"
+        name="MoreTab"
         component={ProfileScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
-              icon="👤"
-              label="Perfil"
+              label="More"
               focused={focused}
-              accentColor={accentColor}
+              mark="..."
             />
           ),
         }}

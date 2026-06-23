@@ -10,8 +10,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
-import { getMyTasks, completeTask as completeTaskService, type Task } from '../../services/tasks';
-import { getMyTodayEvents, type CalendarEvent } from '../../services/events';
+import { HomePlannerSections } from './HomePlannerSections';
+
+type Task = any;
+type CalendarEvent = any;
 
 const MOODS = [
   { emoji: '😴', label: 'Cansada',   ring: '#6B7280' },
@@ -72,12 +74,8 @@ export const HomeAdolescente = () => {
   const fetchData = useCallback(async () => {
     if (!currentHousehold || !user) return;
     setDataLoading(true);
-    const [taskResult, evResult] = await Promise.all([
-      getMyTasks(currentHousehold.id, user.id),
-      getMyTodayEvents(currentHousehold.id, user.id),
-    ]);
-    setTasks(taskResult.tasks);
-    setTodayEvents(evResult.events);
+    setTasks([]);
+    setTodayEvents([]);
     setDataLoading(false);
   }, [currentHousehold, user]);
 
@@ -85,7 +83,6 @@ export const HomeAdolescente = () => {
 
   const completeQuest = async (id: string) => {
     if (completedIds.has(id)) return;
-    await completeTaskService(id);
     setCompletedIds(prev => new Set([...prev, id]));
   };
 
@@ -111,6 +108,8 @@ export const HomeAdolescente = () => {
           </View>
         </View>
 
+        <HomePlannerSections variant="dark" />
+
         {/* Mood ring */}
         <View style={styles.moodCard}>
           <View style={[styles.moodRing, { borderColor: currentMood.ring, shadowColor: currentMood.ring }]}>
@@ -127,6 +126,8 @@ export const HomeAdolescente = () => {
           </View>
         </View>
 
+        {false ? (
+          <>
         {/* Quests */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>⚔️ Misiones de hoy</Text>
@@ -189,6 +190,9 @@ export const HomeAdolescente = () => {
             ))}
           </View>
         )}
+
+          </>
+        ) : null}
 
         {/* Family activity */}
         <Text style={styles.sectionTitle}>👨‍👩‍👧 En la familia</Text>

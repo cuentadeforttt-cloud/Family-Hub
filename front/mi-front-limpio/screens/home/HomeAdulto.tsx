@@ -10,8 +10,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
-import { getMyTasks, completeTask as completeTaskService, type Task } from '../../services/tasks';
-import { getHouseholdEvents, getMyTodayEvents, type CalendarEvent } from '../../services/events';
+import { HomePlannerSections } from './HomePlannerSections';
+
+type Task = any;
+type CalendarEvent = any;
 
 const WELLBEING_EMOJIS = ['😞', '😐', '🙂', '😊', '🤩'];
 
@@ -59,15 +61,9 @@ export const HomeAdulto = () => {
   const fetchData = useCallback(async () => {
     if (!currentHousehold || !user) return;
     setDataLoading(true);
-    const { from, to } = getCurrentWeekRange();
-    const [evResult, taskResult, weekResult] = await Promise.all([
-      getMyTodayEvents(currentHousehold.id, user.id),
-      getMyTasks(currentHousehold.id, user.id),
-      getHouseholdEvents(currentHousehold.id, from, to),
-    ]);
-    setTodayEvents(evResult.events);
-    setTasks(taskResult.tasks);
-    setWeekEvents(weekResult.events);
+    setTodayEvents([]);
+    setTasks([]);
+    setWeekEvents([]);
     setDataLoading(false);
   }, [currentHousehold, user]);
 
@@ -93,7 +89,6 @@ export const HomeAdulto = () => {
   }, [weekEvents]);
 
   const completeTask = async (id: string) => {
-    await completeTaskService(id);
     setTasks(prev => prev.filter(t => t.id !== id));
   };
 
@@ -118,6 +113,8 @@ export const HomeAdulto = () => {
           <Text style={styles.householdName}>🏠 {currentHousehold.nombre}</Text>
         )}
 
+        <HomePlannerSections />
+
         {/* Status toggle */}
         <View style={styles.statusCard}>
           <View style={styles.toggleRow}>
@@ -131,6 +128,8 @@ export const HomeAdulto = () => {
           <Text style={styles.statusSub}>{atHome ? 'Tu familia ve que estás en casa' : 'Tu familia sabe que saliste'}</Text>
         </View>
 
+        {false ? (
+          <>
         {/* My schedule */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Tu día de hoy</Text>
@@ -237,6 +236,9 @@ export const HomeAdulto = () => {
         ) : (
           <Text style={styles.nextEvent}>Sin más eventos esta semana</Text>
         )}
+
+          </>
+        ) : null}
 
         {/* Wellbeing (evening only) */}
         {showWellbeing && (
