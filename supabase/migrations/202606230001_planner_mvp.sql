@@ -177,6 +177,9 @@ create trigger trg_planner_events_updated_at
 alter table public.planner_tasks enable row level security;
 alter table public.planner_events enable row level security;
 
+grant select, insert, update, delete on public.planner_tasks to authenticated;
+grant select, insert, update, delete on public.planner_events to authenticated;
+
 drop policy if exists "planner_tasks_select_active_household" on public.planner_tasks;
 create policy "planner_tasks_select_active_household"
   on public.planner_tasks for select to authenticated
