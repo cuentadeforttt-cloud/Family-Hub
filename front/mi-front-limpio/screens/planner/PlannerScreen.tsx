@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { ActionPill, AppButton, AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
 import { ApiError } from '../../services/api';
 import { getPlannerSummary, type PlannerSummary } from '../../services/plannerSummary';
 import { useAuth } from '../../context/AuthContext';
@@ -101,93 +102,65 @@ export function PlannerScreen() {
       >
         <View style={[S.headerRow, { marginBottom: 16 }]}>
           <View style={{ flex: 1 }}>
-            <Text style={S.title}>Planner</Text>
-            <Text style={S.subtitle}>
+            <AppText variant="title1">Planner</AppText>
+            <AppText variant="bodySmall" tone="secondary" style={S.subtitle}>
               Tareas, eventos y calendario compartido para el hogar.
-            </Text>
+            </AppText>
           </View>
-          <TouchableOpacity style={S.secondaryBtn} onPress={() => void refresh()}>
-            <Text style={S.secondaryText}>Actualizar</Text>
-          </TouchableOpacity>
+          <AppButton title="Actualizar" variant="secondary" size="sm" onPress={() => void refresh()} />
         </View>
 
         {toast ? (
           <View style={S.toastBox}>
-            <Text style={S.toastText}>{toast}</Text>
+            <AppText variant="bodySmall" tone="success" weight="700">{toast}</AppText>
           </View>
         ) : null}
 
         {loading ? (
-          <View style={[S.emptyBox, { minHeight: 120 }]}>
-            <ActivityIndicator color="#CD7353" />
-          </View>
+          <Skeleton variant="screenSection" />
         ) : null}
 
         {!loading && error ? (
-          <View style={S.errorBox}>
-            <Text style={S.errorText}>{error}</Text>
-            <TouchableOpacity style={[S.secondaryBtn, { marginTop: 10 }]} onPress={() => void loadSummary()}>
-              <Text style={S.secondaryText}>Reintentar</Text>
-            </TouchableOpacity>
-          </View>
+          <ErrorState description={error} onRetry={() => void loadSummary()} />
         ) : null}
 
         {!loading && !error && activeTab === 'tasks' ? (
           <>
             <View style={[S.row, { marginBottom: 14 }]}>
-              <View style={[S.card, { flex: 1, minWidth: 96 }]}>
-                <Text style={S.label}>Pendientes</Text>
-                <Text style={{ color: '#17201A', fontSize: 26, fontWeight: '800' }}>
+              <AppCard variant="quiet" padding="compact" style={{ flex: 1, minWidth: 96 }}>
+                <AppText variant="micro" tone="tertiary" weight="700">Pendientes</AppText>
+                <AppText variant="title2">
                   {summary?.pending_tasks_count ?? 0}
-                </Text>
-              </View>
-              <View style={[S.card, { flex: 1, minWidth: 96 }]}>
-                <Text style={S.label}>Hoy</Text>
-                <Text style={{ color: '#17201A', fontSize: 26, fontWeight: '800' }}>
+                </AppText>
+              </AppCard>
+              <AppCard variant="quiet" padding="compact" style={{ flex: 1, minWidth: 96 }}>
+                <AppText variant="micro" tone="tertiary" weight="700">Hoy</AppText>
+                <AppText variant="title2">
                   {summary?.today_tasks_count ?? 0}
-                </Text>
-              </View>
-              <View style={[S.card, { flex: 1, minWidth: 96 }]}>
-                <Text style={S.label}>Vencidas</Text>
-                <Text style={{ color: '#17201A', fontSize: 26, fontWeight: '800' }}>
+                </AppText>
+              </AppCard>
+              <AppCard variant="warning" padding="compact" style={{ flex: 1, minWidth: 96 }}>
+                <AppText variant="micro" tone="warning" weight="700">Vencidas</AppText>
+                <AppText variant="title2">
                   {summary?.overdue_tasks_count ?? 0}
-                </Text>
-              </View>
-              <View style={[S.card, { flex: 1, minWidth: 96 }]}>
-                <Text style={S.label}>Por verificar</Text>
-                <Text style={{ color: '#17201A', fontSize: 26, fontWeight: '800' }}>
+                </AppText>
+              </AppCard>
+              <AppCard variant="success" padding="compact" style={{ flex: 1, minWidth: 96 }}>
+                <AppText variant="micro" tone="success" weight="700">Por verificar</AppText>
+                <AppText variant="title2">
                   {summary?.awaiting_verification_count ?? 0}
-                </Text>
-              </View>
+                </AppText>
+              </AppCard>
             </View>
           </>
         ) : null}
 
         <View style={[S.row, { marginTop: 4, marginBottom: 14 }]}>
-          <TouchableOpacity
-            style={[S.chip, activeTab === 'tasks' && S.chipActive]}
-            onPress={() => setActiveTab('tasks')}
-          >
-            <Text style={[S.chipText, activeTab === 'tasks' && S.chipTextActive]}>Tareas</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[S.chip, activeTab === 'calendar' && S.chipActive]}
-            onPress={() => setActiveTab('calendar')}
-          >
-            <Text style={[S.chipText, activeTab === 'calendar' && S.chipTextActive]}>Calendario</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[S.chip, activeTab === 'goals' && S.chipActive]}
-            onPress={() => setActiveTab('goals')}
-          >
-            <Text style={[S.chipText, activeTab === 'goals' && S.chipTextActive]}>Metas</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={S.secondaryBtn} onPress={() => setSheet({ type: 'task', mode: 'create' })}>
-            <Text style={S.secondaryText}>+ Tarea</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={S.secondaryBtn} onPress={() => setSheet({ type: 'event', mode: 'create' })}>
-            <Text style={S.secondaryText}>+ Evento</Text>
-          </TouchableOpacity>
+          <ActionPill label="Tareas" selected={activeTab === 'tasks'} onPress={() => setActiveTab('tasks')} />
+          <ActionPill label="Calendario" selected={activeTab === 'calendar'} onPress={() => setActiveTab('calendar')} />
+          <ActionPill label="Metas" selected={activeTab === 'goals'} onPress={() => setActiveTab('goals')} />
+          <ActionPill label="Tarea" tone="primary" onPress={() => setSheet({ type: 'task', mode: 'create' })} />
+          <ActionPill label="Evento" tone="primary" onPress={() => setSheet({ type: 'event', mode: 'create' })} />
         </View>
 
         {activeTab === 'tasks' ? (
@@ -210,8 +183,8 @@ export function PlannerScreen() {
 
         {activeTab === 'goals' ? (
           <View style={S.emptyBox}>
-            <Text style={S.emptyTitle}>Metas</Text>
-            <Text style={S.emptyText}>Proximamente.</Text>
+            <AppText variant="title3" align="center">Metas</AppText>
+            <AppText variant="bodySmall" tone="secondary" align="center">Proximamente.</AppText>
           </View>
         ) : null}
       </ScrollView>
