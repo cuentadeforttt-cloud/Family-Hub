@@ -11,6 +11,11 @@ const legacyInvitationFlowDisabled = (req, res) =>
   })
 
 router.post('/', authFinalMiddleware, householdsController.createHousehold)
+router.post(
+  '/:household_id/members/:membership_id/finalize',
+  authFinalMiddleware,
+  householdsController.finalizeHouseholdMember,
+)
 router.post('/:household_id/invitations', legacyInvitationFlowDisabled)
 
 module.exports = router

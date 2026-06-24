@@ -5,6 +5,8 @@ const { buildMe } = require('../lib/me.service')
 const COORDINATOR_ROLE = 'coordinador'
 const DEFAULT_TIMEZONE = 'America/Argentina/Buenos_Aires'
 const DEFAULT_LANGUAGE = 'es-419'
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 const createHttpError = (statusCode, message, code) => {
   const error = new Error(message)
@@ -14,6 +16,16 @@ const createHttpError = (statusCode, message, code) => {
 }
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '')
+
+const requireUuidParam = (value, name) => {
+  const normalized = normalizeString(value)
+
+  if (!UUID_PATTERN.test(normalized)) {
+    throw createHttpError(400, `${name} invalido.`, `${name}/invalid`)
+  }
+
+  return normalized
+}
 
 const isDbValidationError = (error) => {
   const message = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`.toLowerCase()
@@ -122,6 +134,48 @@ const mapCreateHouseholdRpcError = (error) => {
   return createHttpError(500, 'No se pudo crear el hogar.', 'household/create_failed')
 }
 
+const mapFinalizeMemberRpcError = (error) => {
+  const message = `${error?.message ?? ''} ${error?.details ?? ''} ${error?.hint ?? ''}`.toLowerCase()
+
+  if (error?.code === '28000' || message.includes('not_authenticated')) {
+    return createHttpError(401, 'No autenticado.', 'auth/unauthorized')
+  }
+
+  if (message.includes('not_household_coordinator') || error?.code === '42501') {
+    return createHttpError(403, 'Solo un coordinator activo puede quitar miembros.', 'household/not_coordinator')
+  }
+
+  if (message.includes('membership_not_found')) {
+    return createHttpError(404, 'Miembro no encontrado.', 'membership/not_found')
+  }
+
+  if (message.includes('membership_not_active')) {
+    return createHttpError(409, 'La membresia no esta activa.', 'membership/not_active')
+  }
+
+  if (message.includes('cannot_finalize_self')) {
+    return createHttpError(400, 'No podes quitarte desde esta accion.', 'membership/cannot_finalize_self')
+  }
+
+  if (message.includes('cannot_finalize_last_coordinator')) {
+    return createHttpError(409, 'No se puede quitar al ultimo coordinator del hogar.', 'membership/last_coordinator')
+  }
+
+  if (
+    error?.code === 'PGRST202' ||
+    message.includes('schema cache') ||
+    message.includes('function') && message.includes('finalize_household_member')
+  ) {
+    return createHttpError(
+      500,
+      'RPC finalize_household_member no disponible en Supabase. Revisar migracion/schema cache.',
+      'membership/finalize_rpc_unavailable',
+    )
+  }
+
+  return createHttpError(500, 'No se pudo quitar el miembro.', 'membership/finalize_failed')
+}
+
 const createHousehold = async (req, res) => {
   try {
     const accessToken = req.accessToken
@@ -175,6 +229,48 @@ const createHousehold = async (req, res) => {
     return res.status(statusCode).json({
       error: statusCode >= 500 ? 'No se pudo crear el hogar.' : error.message,
       code: statusCode >= 500 ? 'household/create_failed' : error.code,
+    })
+  }
+}
+
+const finalizeHouseholdMember = async (req, res) => {
+  try {
+    if (!req.user?.id || !req.accessToken) {
+      throw createHttpError(401, 'No autenticado.', 'auth/unauthorized')
+    }
+
+    const householdId = requireUuidParam(req.params?.household_id, 'household_id')
+    const membershipId = requireUuidParam(req.params?.membership_id, 'membership_id')
+    const scopedClient = createSupabaseForToken(req.accessToken)
+
+    const { data, error } = await scopedClient.rpc('finalize_household_member', {
+      p_household_id: householdId,
+      p_membership_id: membershipId,
+    })
+
+    if (error) {
+      console.error('[finalizeHouseholdMember] RPC error', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
+      throw mapFinalizeMemberRpcError(error)
+    }
+
+    if (!data?.membership) {
+      throw createHttpError(500, 'La RPC no devolvio membership.', 'membership/invalid_rpc_response')
+    }
+
+    return res.status(200).json({
+      membership: data.membership,
+    })
+  } catch (error) {
+    const statusCode = error.statusCode ?? 500
+
+    return res.status(statusCode).json({
+      error: statusCode >= 500 ? 'No se pudo quitar el miembro.' : error.message,
+      code: statusCode >= 500 ? 'membership/finalize_failed' : error.code,
     })
   }
 }
@@ -349,5 +445,6 @@ const validateInvitation = async (req, res) => {
 module.exports = {
   createHousehold,
   createHouseholdInvitation,
+  finalizeHouseholdMember,
   validateInvitation,
 }

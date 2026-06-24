@@ -338,3 +338,16 @@ export const rejectJoinRequest = (
       accessToken,
     },
   );
+
+export const finalizeHouseholdMember = (
+  accessToken: string,
+  householdId: string,
+  membershipId: string,
+) =>
+  requestJson<MembershipResponse>(
+    `/api/households/${householdId}/members/${membershipId}/finalize`,
+    {
+      method: 'POST',
+      accessToken,
+    },
+  );
