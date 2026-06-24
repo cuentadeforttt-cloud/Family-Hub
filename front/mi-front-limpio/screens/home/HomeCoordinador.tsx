@@ -7,24 +7,25 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
+import { ActionPill, AppButton, AppCard, AppScreen, AppText } from '../../components/ui';
+import { colors, radius, shadows, spacing } from '../../constants/theme';
 import { HomePlannerSections } from './HomePlannerSections';
 
 type Task = any;
 type CalendarEvent = any;
 
-const PRIORITY_COLORS: Record<string, string> = { alta: '#DC2626', media: '#F59E0B', baja: '#22C55E' };
+const PRIORITY_COLORS: Record<string, string> = { alta: colors.danger.base, media: colors.warning.base, baja: colors.success.base };
 
 const ROL_EMOJI: Record<string, string> = {
   coordinador: '👑', adulto: '👤', adolescente: '🎮', adulto_mayor: '🌟',
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  trabajo: '#6B4FE8', escuela: '#7C9E7A', familia: '#D4A853',
-  personal: '#CD7353', salud: '#CD7353', deporte: '#7C9E7A', otro: '#888888',
+  trabajo: colors.info.base, escuela: colors.sage[500], familia: colors.sand[500],
+  personal: colors.terracotta[500], salud: colors.success.base, deporte: colors.sage[500], otro: colors.text.muted,
 };
 
 function formatTime(iso: string): string {
@@ -38,24 +39,24 @@ function FamilyPulse() {
   const { members } = useHousehold();
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardLabelSmall}>FAMILIA</Text>
+    <AppCard variant="default" padding="default" style={styles.card}>
+      <AppText variant="micro" tone="tertiary" weight="700" style={styles.cardLabelSmall}>FAMILIA</AppText>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.memberScroll}>
         {members.length === 0 ? (
-          <Text style={styles.textMuted}>Sin miembros aún</Text>
+          <AppText variant="bodySmall" tone="tertiary">Sin miembros aun</AppText>
         ) : members.map(m => (
           <View key={m.id} style={styles.memberItem}>
             <View style={[styles.memberAvatarRing, { borderColor: C.primary }]}>
               <Text style={styles.memberEmoji}>{ROL_EMOJI[m.rol] ?? '👤'}</Text>
             </View>
-            <Text style={styles.memberName}>{m.user?.nombre?.split(' ')[0] ?? 'Miembro'}</Text>
+            <AppText variant="micro" tone="secondary" weight="700">{m.user?.nombre?.split(' ')[0] ?? 'Miembro'}</AppText>
           </View>
         ))}
       </ScrollView>
-      <Text style={styles.memberStatus}>
+      <AppText variant="caption" tone="tertiary">
         {members.length} miembro{members.length !== 1 ? 's' : ''} en el hogar
-      </Text>
-    </View>
+      </AppText>
+    </AppCard>
   );
 }
 
@@ -64,24 +65,24 @@ function DailyBriefing({ eventCount, taskCount }: { eventCount: number; taskCoun
   const progress = Math.max(0, Math.min(100, Math.round(((hour - 6) / 16) * 100)));
 
   return (
-    <View style={[styles.card, styles.briefingCard]}>
+    <AppCard variant="warning" padding="default" style={[styles.card, styles.briefingCard]}>
       <View style={styles.briefingHeader}>
         <Text style={styles.briefingIcon}>✨</Text>
-        <Text style={styles.cardLabelSmall}>RESUMEN DE HOY</Text>
+        <AppText variant="micro" tone="warning" weight="700" style={styles.cardLabelSmall}>RESUMEN DE HOY</AppText>
       </View>
       <View style={styles.briefingRow}>
-        <Text style={styles.briefingItem}>📅  {eventCount} evento{eventCount !== 1 ? 's' : ''} familiares</Text>
+        <AppText variant="bodySmall" tone="secondary" style={styles.briefingItem}>{eventCount} evento{eventCount !== 1 ? 's' : ''} familiares</AppText>
       </View>
       <View style={styles.briefingRow}>
-        <Text style={styles.briefingItem}>✅  {taskCount} tarea{taskCount !== 1 ? 's' : ''} pendiente{taskCount !== 1 ? 's' : ''}</Text>
+        <AppText variant="bodySmall" tone="secondary" style={styles.briefingItem}>{taskCount} tarea{taskCount !== 1 ? 's' : ''} pendiente{taskCount !== 1 ? 's' : ''}</AppText>
       </View>
       <View style={styles.progressRow}>
         <View style={styles.progressBg}>
           <View style={[styles.progressFill, { width: `${progress}%` as any }]} />
         </View>
-        <Text style={styles.progressLabel}>{progress}% del día</Text>
+        <AppText variant="micro" tone="tertiary" style={styles.progressLabel}>{progress}% del dia</AppText>
       </View>
-    </View>
+    </AppCard>
   );
 }
 
@@ -97,29 +98,11 @@ function QuickActions({ householdId }: { householdId: string }) {
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsScroll}>
-      <TouchableOpacity
-        style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]}
-        accessibilityRole="button"
-        onPress={() => openPlanner('tasks', 'task')}
-      >
-        <Text style={styles.actionText}>+ Tarea</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]}
-        accessibilityRole="button"
-        onPress={() => openPlanner('calendar', 'event')}
-      >
-        <Text style={styles.actionText}>+ Evento</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.actionPill, { backgroundColor: 'transparent', borderColor: C.primary }]}
-        accessibilityRole="button"
-        onPress={() => navigation.navigate('P03InvitarPersonas', { householdId })}
-      >
-        <Text style={styles.actionText}>Invitar</Text>
-      </TouchableOpacity>
+      <ActionPill label="Tarea" selected onPress={() => openPlanner('tasks', 'task')} style={styles.actionPill} />
+      <ActionPill label="Evento" tone="primary" onPress={() => openPlanner('calendar', 'event')} style={styles.actionPill} />
+      <ActionPill label="Invitar" tone="success" onPress={() => navigation.navigate('P03InvitarPersonas', { householdId })} style={styles.actionPill} />
       <TouchableOpacity style={[styles.actionPill, styles.sosBtn]} accessibilityRole="button">
-        <Text style={[styles.actionText, { color: '#FFFFFF' }]}>🚨 SOS</Text>
+        <AppText variant="micro" tone="inverse" weight="700">SOS</AppText>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -203,19 +186,17 @@ function PendingTasks({
 
 function BudgetCard() {
   return (
-    <View style={[styles.card, styles.budgetCard]}>
+    <AppCard variant="default" padding="default" style={[styles.card, styles.budgetCard]}>
       <View style={styles.budgetLeft}>
-        <Text style={styles.budgetPct}>72%</Text>
-        <Text style={styles.budgetLabel}>del presupuesto{'\n'}mensual usado</Text>
+        <AppText variant="title1" tone="warning" style={styles.budgetPct}>72%</AppText>
+        <AppText variant="caption" tone="tertiary" style={styles.budgetLabel}>del presupuesto{'\n'}mensual usado</AppText>
       </View>
       <View style={styles.budgetRight}>
-        <Text style={styles.budgetAmount}>$3.200</Text>
-        <Text style={styles.budgetRemaining}>restantes</Text>
-        <TouchableOpacity style={styles.addExpenseBtn}>
-          <Text style={styles.addExpenseText}>+ Gasto</Text>
-        </TouchableOpacity>
+        <AppText variant="title3" style={styles.budgetAmount}>$3.200</AppText>
+        <AppText variant="caption" tone="tertiary">restantes</AppText>
+        <AppButton title="Gasto" variant="secondary" size="sm" style={styles.addExpenseBtn} />
       </View>
-    </View>
+    </AppCard>
   );
 }
 
@@ -230,15 +211,14 @@ export const HomeCoordinador = () => {
   const firstName = user?.user_metadata?.nombre?.split(' ')[0] ?? 'Coordinador';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <AppScreen scroll bottomInset="tab" contentContainerStyle={styles.content}>
 
         <View style={styles.topBar}>
           <View>
-            <Text style={styles.greeting}>{greeting}, {firstName}</Text>
-            <Text style={styles.dateLabel}>
+            <AppText variant="title2">{greeting}, {firstName}</AppText>
+            <AppText variant="caption" tone="tertiary" style={styles.dateLabel}>
               {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.notifBell}>
             <Text style={{ fontSize: 22 }}>🔔</Text>
@@ -246,72 +226,69 @@ export const HomeCoordinador = () => {
         </View>
 
         {currentHousehold && (
-          <Text style={styles.householdName}>🏠 {currentHousehold.nombre}</Text>
+          <AppText variant="caption" tone="warning" weight="700" style={styles.householdName}>{currentHousehold.nombre}</AppText>
         )}
 
         <FamilyPulse />
         <DailyBriefing eventCount={0} taskCount={0} />
         {currentHousehold && <QuickActions householdId={currentHousehold.id} />}
-        <HomePlannerSections variant="dark" />
+        <HomePlannerSections />
         <View style={{ height: 20 }} />
         <BudgetCard />
         <View style={{ height: 40 }} />
-      </ScrollView>
-    </SafeAreaView>
+    </AppScreen>
   );
 };
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const C = {
-  bg: '#0D1117',
-  surface: '#161B22',
-  surface2: '#1C2128',
-  border: 'rgba(205,115,83,0.15)',
-  text: '#FFFFFF',
-  textMuted: '#888888',
-  textDim: '#C8C8C8',
-  primary: '#CD7353',
-  amber: '#F59E0B',
-  red: '#DC2626',
-  green: '#22C55E',
+  bg: colors.background.base,
+  surface: colors.surface.card,
+  surface2: colors.surface.soft,
+  border: colors.border.subtle,
+  text: colors.text.primary,
+  textMuted: colors.text.tertiary,
+  textDim: colors.text.secondary,
+  primary: colors.terracotta[500],
+  amber: colors.warning.base,
+  red: colors.danger.base,
+  green: colors.success.base,
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  container: { flex: 1, backgroundColor: C.bg },
-  content: { paddingHorizontal: 20, paddingBottom: 24 },
+  content: { paddingTop: spacing[1] },
 
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: 8, marginBottom: 6 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing[2] },
   greeting: { fontSize: 26, fontWeight: '700', color: C.text },
   dateLabel: { fontSize: 13, color: C.textMuted, marginTop: 2 },
   notifBell: { paddingTop: 4 },
-  householdName: { fontSize: 13, color: C.primary, marginBottom: 16 },
+  householdName: { marginBottom: spacing[4] },
 
-  card: { backgroundColor: C.surface, borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: C.border },
+  card: { marginBottom: spacing[4], ...shadows.card },
   cardLabelSmall: { fontSize: 11, letterSpacing: 0.8, color: C.textMuted, fontWeight: '600', marginBottom: 10, textTransform: 'uppercase' },
   textMuted: { color: C.textMuted, fontSize: 13 },
 
   memberScroll: { marginBottom: 10 },
   memberItem: { alignItems: 'center', marginRight: 16, minWidth: 52 },
-  memberAvatarRing: { width: 52, height: 52, borderRadius: 26, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  memberAvatarRing: { width: 52, height: 52, borderRadius: radius.pill, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[1], backgroundColor: colors.background.soft },
   memberEmoji: { fontSize: 28 },
   memberName: { fontSize: 11, color: C.textDim, fontWeight: '500' },
   memberStatus: { fontSize: 12, color: C.textMuted },
 
-  briefingCard: { backgroundColor: C.surface2 },
+  briefingCard: { backgroundColor: colors.warning.soft },
   briefingHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
   briefingIcon: { fontSize: 14 },
   briefingRow: { marginBottom: 8 },
   briefingItem: { fontSize: 14, color: C.textDim, lineHeight: 20 },
   progressRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 },
-  progressBg: { flex: 1, height: 6, backgroundColor: '#2D3748', borderRadius: 3, overflow: 'hidden' },
+  progressBg: { flex: 1, height: 6, backgroundColor: colors.sand[100], borderRadius: radius.pill, overflow: 'hidden' },
   progressFill: { height: 6, backgroundColor: C.primary, borderRadius: 3 },
   progressLabel: { fontSize: 11, color: C.textMuted, width: 70 },
 
-  actionsScroll: { marginBottom: 14, marginHorizontal: -4 },
-  actionPill: { borderWidth: 1.5, borderRadius: 20, paddingVertical: 8, paddingHorizontal: 16, marginHorizontal: 4 },
-  sosBtn: { backgroundColor: C.red },
+  actionsScroll: { marginBottom: spacing[4], marginHorizontal: -spacing[1] },
+  actionPill: { marginHorizontal: spacing[1] },
+  sosBtn: { backgroundColor: colors.danger.base, borderColor: colors.danger.base, minHeight: 44, paddingHorizontal: spacing[4], paddingVertical: spacing[2], borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   actionText: { fontSize: 13, color: C.primary, fontWeight: '600' },
 
   sectionTitle: { fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 14 },
@@ -347,6 +324,6 @@ const styles = StyleSheet.create({
   budgetRight: { alignItems: 'flex-end' },
   budgetAmount: { fontSize: 22, fontWeight: '700', color: C.text },
   budgetRemaining: { fontSize: 12, color: C.textMuted },
-  addExpenseBtn: { marginTop: 8, borderWidth: 1, borderColor: C.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
+  addExpenseBtn: { marginTop: spacing[2] },
   addExpenseText: { color: C.primary, fontSize: 12, fontWeight: '600' },
 });

@@ -9,9 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
+import { AppButton, AppCard, AppScreen, AppText } from '../../components/ui';
+import { colors, radius, shadows, spacing } from '../../constants/theme';
 import { HomePlannerSections } from './HomePlannerSections';
 
 type CalendarEvent = any;
@@ -92,37 +93,41 @@ export const HomeAdultoMayor = () => {
     }));
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <>
+      <AppScreen scroll bottomInset="fab" contentContainerStyle={styles.content}>
 
         {/* Greeting header */}
-        <View style={styles.greetingCard}>
+        <AppCard variant="quiet" padding="generous" style={styles.greetingCard}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>{greeting},</Text>
-            <Text style={styles.greetingName}>{firstName}</Text>
-            <Text style={styles.greetingDate}>
+            <AppText variant="title3" tone="secondary">{greeting},</AppText>
+            <AppText variant="title1" style={styles.greetingName}>{firstName}</AppText>
+            <AppText variant="bodySmall" tone="tertiary">
               {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.avatarLarge}>
             <Text style={{ fontSize: 36 }}>👵</Text>
           </View>
-        </View>
+        </AppCard>
 
         <HomePlannerSections />
 
         {/* "Estoy bien" button */}
-        <TouchableOpacity
-          style={[styles.wellbeingBtn, checkedIn && styles.wellbeingBtnDone]}
-          onPress={handleCheckin}
-          accessibilityRole="button"
-          accessibilityLabel="Estoy bien hoy"
-        >
-          <Text style={styles.wellbeingBtnText}>{checkedIn ? '✅ Ya avisé que estoy bien' : '✅ Estoy bien hoy'}</Text>
-          <Text style={styles.wellbeingBtnSub}>La familia recibirá una notificación</Text>
-        </TouchableOpacity>
-        <Text style={styles.lastCheckin}>Ayer a las 8:32 AM ✓</Text>
-
+        <AppCard variant="success" padding="generous" style={styles.checkinCard}>
+          <AppButton
+            title={checkedIn ? 'Ya avise que estoy bien' : 'Estoy bien hoy'}
+            variant="primary"
+            size="lg"
+            onPress={handleCheckin}
+            accessibilityLabel="Estoy bien hoy"
+          />
+          <AppText variant="bodySmall" tone="secondary" align="center" style={styles.checkinSub}>
+            La familia recibira una notificacion
+          </AppText>
+        </AppCard>
+        <AppText variant="caption" tone="tertiary" align="center" style={styles.lastCheckin}>
+          Ayer a las 8:32 AM
+        </AppText>
         {false ? (
           <>
         {/* Appointments / events today */}
@@ -150,28 +155,28 @@ export const HomeAdultoMayor = () => {
         ) : null}
 
         {/* Family photos */}
-        <Text style={styles.sectionTitle}>📷 Fotos de tu familia</Text>
-        <Text style={styles.photosMeta}>3 fotos nuevas esta semana</Text>
+        <AppText variant="title2" style={styles.sectionTitle}>Fotos de tu familia</AppText>
+        <AppText variant="caption" tone="warning" weight="700" style={styles.photosMeta}>3 fotos nuevas esta semana</AppText>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
           {MOCK_PHOTOS.map((p, idx) => (
-            <View key={p.id} style={[styles.photoCard, idx === 0 && styles.photoCardFeatured]}>
+            <AppCard key={p.id} variant={idx === 0 ? 'warning' : 'default'} padding="compact" style={[styles.photoCard, idx === 0 && styles.photoCardFeatured]}>
               <View style={styles.photoPlaceholder}>
                 <Text style={{ fontSize: idx === 0 ? 64 : 52 }}>{p.emoji}</Text>
               </View>
-              <Text style={styles.photoFrom}>{p.from}</Text>
-              <Text style={styles.photoDesc}>{p.desc}</Text>
-            </View>
+              <AppText variant="bodySmall" weight="700" align="center">{p.from}</AppText>
+              <AppText variant="caption" tone="secondary" align="center">{p.desc}</AppText>
+            </AppCard>
           ))}
         </ScrollView>
 
         {/* Voice messages */}
-        <Text style={styles.sectionTitle}>🎙️ Mensajes de voz</Text>
+        <AppText variant="title2" style={styles.sectionTitle}>Mensajes de voz</AppText>
         {MOCK_VOICE.map(v => (
-          <View key={v.id} style={styles.voiceCard}>
+          <AppCard key={v.id} variant="default" padding="default" style={styles.voiceCard}>
             <Text style={{ fontSize: 42, marginRight: 12 }}>{v.emoji}</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.voiceName}>{v.from}</Text>
-              <Text style={styles.voiceMeta}>{v.duration} · {v.date}</Text>
+              <AppText variant="title3">{v.from}</AppText>
+              <AppText variant="bodySmall" tone="tertiary">{v.duration} - {v.date}</AppText>
             </View>
             <TouchableOpacity
               style={[styles.playBtn, playingId === v.id && styles.playBtnActive]}
@@ -179,34 +184,31 @@ export const HomeAdultoMayor = () => {
               accessibilityRole="button"
               accessibilityLabel={`Reproducir mensaje de ${v.from}`}
             >
-              <Text style={styles.playBtnText}>{playingId === v.id ? '⏸' : '▶'}</Text>
+              <Text style={styles.playBtnText}>{playingId === v.id ? 'II' : '▶'}</Text>
             </TouchableOpacity>
-          </View>
+          </AppCard>
         ))}
-        <TouchableOpacity style={styles.recordBtn} accessibilityRole="button" accessibilityLabel="Grabar respuesta">
-          <Text style={styles.recordBtnText}>🎙️  Grabar respuesta</Text>
-        </TouchableOpacity>
+        <AppButton title="Grabar respuesta" variant="secondary" size="lg" accessibilityLabel="Grabar respuesta" style={styles.recordBtn} />
 
         {/* Quick contacts */}
-        <Text style={styles.sectionTitle}>📞 Llamar a la familia</Text>
+        <AppText variant="title2" style={styles.sectionTitle}>Llamar a la familia</AppText>
         {contacts.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Sin familiares en el hogar aún</Text>
-          </View>
+          <AppCard variant="quiet" padding="generous" style={styles.emptyCard}>
+            <AppText variant="bodyLarge" tone="secondary" align="center">Sin familiares en el hogar aun</AppText>
+          </AppCard>
         ) : (
           <View style={styles.contactsGrid}>
             {contacts.map(c => (
               <TouchableOpacity key={c.id} style={styles.contactCard} accessibilityRole="button" accessibilityLabel={`Llamar a ${c.name}`}>
                 <Text style={{ fontSize: 40, marginBottom: 6 }}>{c.emoji}</Text>
-                <Text style={styles.contactName}>{c.name}</Text>
-                <Text style={styles.callLabel}>Llamar</Text>
+                <AppText variant="bodySmall" weight="700" align="center" style={styles.contactName}>{c.name}</AppText>
+                <AppText variant="caption" tone="success" weight="700">Llamar</AppText>
               </TouchableOpacity>
             ))}
           </View>
         )}
-
         <View style={{ height: 100 }} />
-      </ScrollView>
+      </AppScreen>
 
       {/* SOS floating button */}
       <TouchableOpacity
@@ -233,35 +235,31 @@ export const HomeAdultoMayor = () => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </>
   );
 };
 
 const C = {
-  bg: '#FFFAF5',
-  surface: '#FFFFFF',
-  border: '#F0E8DC',
-  text: '#1A1A1A',
-  textMuted: '#777777',
-  amber: '#D4975A',
-  primary: '#CD7353',
-  sage: '#7C9E7A',
+  bg: colors.background.base,
+  surface: colors.surface.card,
+  border: colors.border.default,
+  text: colors.text.primary,
+  textMuted: colors.text.tertiary,
+  amber: colors.warning.base,
+  primary: colors.terracotta[500],
+  sage: colors.sage[500],
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  container: { flex: 1, backgroundColor: C.bg },
-  content: { paddingHorizontal: 20, paddingBottom: 24 },
+  content: { paddingTop: spacing[1] },
 
   greetingCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: C.amber + '22',
-    borderRadius: 20, padding: 20, marginBottom: 20, marginTop: 8,
+    flexDirection: 'row', alignItems: 'center', marginBottom: spacing[5], marginTop: spacing[1],
   },
   greeting: { fontSize: 22, color: C.text, fontWeight: '500' },
-  greetingName: { fontSize: 32, fontWeight: '800', color: C.text, marginBottom: 4 },
+  greetingName: { marginBottom: spacing[1] },
   greetingDate: { fontSize: 16, color: C.textMuted },
-  avatarLarge: { width: 72, height: 72, borderRadius: 36, backgroundColor: C.amber + '33', alignItems: 'center', justifyContent: 'center' },
+  avatarLarge: { width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.warning.soft, alignItems: 'center', justifyContent: 'center' },
 
   wellbeingBtn: {
     backgroundColor: C.amber,
@@ -271,9 +269,11 @@ const styles = StyleSheet.create({
   wellbeingBtnDone: { backgroundColor: C.sage },
   wellbeingBtnText: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginBottom: 4 },
   wellbeingBtnSub: { fontSize: 14, color: 'rgba(255,255,255,0.85)' },
-  lastCheckin: { fontSize: 14, color: C.textMuted, textAlign: 'center', marginBottom: 24 },
+  checkinCard: { marginBottom: spacing[2] },
+  checkinSub: { marginTop: spacing[3] },
+  lastCheckin: { marginBottom: spacing[6] },
 
-  sectionTitle: { fontSize: 26, fontWeight: '800', color: C.text, marginBottom: 14, marginTop: 8 },
+  sectionTitle: { marginBottom: spacing[3], marginTop: spacing[2] },
   appointmentCard: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: C.surface, borderRadius: 16, padding: 18, marginBottom: 10,
@@ -284,35 +284,31 @@ const styles = StyleSheet.create({
   appointmentDivider: { width: 1, height: 48, backgroundColor: C.border, marginRight: 12 },
   appointmentCategory: { fontSize: 14, color: C.textMuted, fontWeight: '600', marginBottom: 4 },
   appointmentTitle: { fontSize: 20, fontWeight: '700', color: C.text },
-  emptyCard: { backgroundColor: C.surface, borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: C.border },
+  emptyCard: { marginBottom: spacing[4] },
   emptyText: { fontSize: 18, color: C.textMuted, textAlign: 'center', lineHeight: 28 },
 
-  photosMeta: { fontSize: 14, color: C.amber, fontWeight: '600', marginBottom: 12, marginTop: -8 },
-  photosScroll: { marginBottom: 24, marginHorizontal: -4 },
-  photoCard: { backgroundColor: C.surface, borderRadius: 16, padding: 12, marginHorizontal: 6, width: 150, alignItems: 'center', borderWidth: 1, borderColor: C.border },
-  photoCardFeatured: { width: 170, borderColor: C.amber },
-  photoPlaceholder: { width: '100%', aspectRatio: 1, backgroundColor: C.amber + '22', borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  photosMeta: { marginBottom: spacing[3], marginTop: -spacing[2] },
+  photosScroll: { marginBottom: spacing[6], marginHorizontal: -spacing[1] },
+  photoCard: { marginHorizontal: spacing[1], width: 150, alignItems: 'center' },
+  photoCardFeatured: { width: 170 },
+  photoPlaceholder: { width: '100%', aspectRatio: 1, backgroundColor: colors.warning.soft, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[2] },
   photoFrom: { fontSize: 14, fontWeight: '700', color: C.text, marginBottom: 2 },
   photoDesc: { fontSize: 12, color: C.textMuted, textAlign: 'center' },
 
-  voiceCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: C.surface, borderRadius: 16, padding: 16, marginBottom: 10,
-    borderWidth: 1, borderColor: C.border, minHeight: 80,
-  },
+  voiceCard: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing[3], minHeight: 80 },
   voiceName: { fontSize: 20, fontWeight: '700', color: C.text },
   voiceMeta: { fontSize: 14, color: C.textMuted, marginTop: 2 },
-  playBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: C.amber, alignItems: 'center', justifyContent: 'center' },
+  playBtn: { width: 56, height: 56, borderRadius: radius.pill, backgroundColor: C.amber, alignItems: 'center', justifyContent: 'center' },
   playBtnActive: { backgroundColor: C.primary },
   playBtnText: { fontSize: 22, color: '#FFFFFF' },
-  recordBtn: { borderWidth: 2, borderColor: C.amber, borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 24 },
+  recordBtn: { marginBottom: spacing[6] },
   recordBtnText: { fontSize: 18, color: C.amber, fontWeight: '700' },
 
-  contactsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
+  contactsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing[3], marginBottom: spacing[4] },
   contactCard: {
     flex: 1, minWidth: '44%',
-    backgroundColor: C.surface, borderRadius: 16, padding: 16, alignItems: 'center',
-    borderWidth: 1, borderColor: C.border, minHeight: 110, justifyContent: 'center',
+    backgroundColor: C.surface, borderRadius: radius.xl, padding: spacing[4], alignItems: 'center',
+    borderWidth: 1, borderColor: C.border, minHeight: 110, justifyContent: 'center', ...shadows.card,
   },
   contactName: { fontSize: 14, fontWeight: '700', color: C.text, textAlign: 'center', marginBottom: 4 },
   callLabel: { fontSize: 14, color: C.sage, fontWeight: '600' },
@@ -320,16 +316,16 @@ const styles = StyleSheet.create({
   sosFloat: {
     position: 'absolute', bottom: 100, right: 20,
     width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#DC2626', alignItems: 'center', justifyContent: 'center',
-    shadowColor: '#DC2626', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+    backgroundColor: colors.danger.base, alignItems: 'center', justifyContent: 'center',
+    shadowColor: colors.danger.base, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
   },
   sosText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
-  modalCard: { backgroundColor: '#FFFFFF', borderRadius: 24, padding: 28, width: '100%', alignItems: 'center' },
+  modalCard: { backgroundColor: colors.surface.card, borderRadius: radius.xl, padding: spacing[7], width: '100%', alignItems: 'center', ...shadows.floating },
   modalTitle: { fontSize: 28, fontWeight: '800', color: C.text, marginBottom: 12 },
   modalText: { fontSize: 20, color: C.textMuted, textAlign: 'center', marginBottom: 28, lineHeight: 28 },
-  modalSendBtn: { backgroundColor: '#DC2626', borderRadius: 14, paddingVertical: 18, width: '100%', alignItems: 'center', marginBottom: 12 },
+  modalSendBtn: { backgroundColor: colors.danger.base, borderRadius: radius.lg, paddingVertical: spacing[4], width: '100%', alignItems: 'center', marginBottom: spacing[3] },
   modalSendText: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
   modalCancelBtn: { paddingVertical: 14, width: '100%', alignItems: 'center' },
   modalCancelText: { color: C.textMuted, fontSize: 16, fontWeight: '600' },

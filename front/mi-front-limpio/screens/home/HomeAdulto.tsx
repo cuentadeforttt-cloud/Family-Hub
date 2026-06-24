@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
+import { ActionPill, AppCard, AppScreen, AppText } from '../../components/ui';
+import { colors, radius, shadows, spacing } from '../../constants/theme';
 import { HomePlannerSections } from './HomePlannerSections';
 
 type Task = any;
@@ -93,15 +93,14 @@ export const HomeAdulto = () => {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <AppScreen scroll bottomInset="tab" contentContainerStyle={styles.content}>
 
         <View style={styles.topBar}>
           <View>
-            <Text style={styles.greeting}>Hola, {firstName} 👋</Text>
-            <Text style={styles.dateLabel}>
+            <AppText variant="title2">Hola, {firstName}</AppText>
+            <AppText variant="caption" tone="tertiary" style={styles.dateLabel}>
               {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </Text>
+            </AppText>
           </View>
           <View style={styles.avatarCircle}>
             <Text style={{ fontSize: 24 }}>👤</Text>
@@ -110,24 +109,23 @@ export const HomeAdulto = () => {
         </View>
 
         {currentHousehold && (
-          <Text style={styles.householdName}>🏠 {currentHousehold.nombre}</Text>
+          <AppText variant="caption" tone="warning" weight="700" style={styles.householdName}>
+            {currentHousehold.nombre}
+          </AppText>
         )}
 
         <HomePlannerSections />
 
         {/* Status toggle */}
-        <View style={styles.statusCard}>
+        <AppCard variant="quiet" padding="default" style={styles.statusCard}>
           <View style={styles.toggleRow}>
-            <TouchableOpacity style={[styles.toggleOption, atHome && styles.toggleActive]} onPress={() => setAtHome(true)}>
-              <Text style={[styles.toggleText, atHome && styles.toggleTextActive]}>🏠 En casa</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.toggleOption, !atHome && styles.toggleActiveOut]} onPress={() => setAtHome(false)}>
-              <Text style={[styles.toggleText, !atHome && styles.toggleTextActive]}>🚗 Salí</Text>
-            </TouchableOpacity>
+            <ActionPill label="En casa" selected={atHome} tone="success" onPress={() => setAtHome(true)} />
+            <ActionPill label="Sali" selected={!atHome} tone="warning" onPress={() => setAtHome(false)} />
           </View>
-          <Text style={styles.statusSub}>{atHome ? 'Tu familia ve que estás en casa' : 'Tu familia sabe que saliste'}</Text>
-        </View>
-
+          <AppText variant="caption" tone="tertiary" align="center">
+            {atHome ? 'Tu familia ve que estas en casa' : 'Tu familia sabe que saliste'}
+          </AppText>
+        </AppCard>
         {false ? (
           <>
         {/* My schedule */}
@@ -242,8 +240,10 @@ export const HomeAdulto = () => {
 
         {/* Wellbeing (evening only) */}
         {showWellbeing && (
-          <View style={[styles.card, styles.wellbeingCard]}>
-            <Text style={styles.wellbeingTitle}>¿Cómo estuvo tu día?</Text>
+          <AppCard variant="default" padding="generous" style={styles.wellbeingCard}>
+            <AppText variant="title3" align="center" style={styles.wellbeingTitle}>
+              Como estuvo tu dia?
+            </AppText>
             <View style={styles.emojiRow}>
               {WELLBEING_EMOJIS.map((e, i) => (
                 <TouchableOpacity
@@ -256,41 +256,40 @@ export const HomeAdulto = () => {
               ))}
             </View>
             {wellbeing !== null && (
-              <Text style={styles.wellbeingThanks}>¡Gracias! Tu estado se comparte con la familia 💛</Text>
+              <AppText variant="caption" tone="secondary" align="center" style={styles.wellbeingThanks}>
+                Gracias. Tu estado se comparte con la familia.
+              </AppText>
             )}
-          </View>
+          </AppCard>
         )}
 
         <View style={{ height: 40 }} />
-      </ScrollView>
-    </SafeAreaView>
+    </AppScreen>
   );
 };
 
 const C = {
-  bg: '#FAFAF8',
-  surface: '#FFFFFF',
-  border: '#E2DFD6',
-  text: '#1C1C1C',
-  textMuted: '#6B6B6B',
-  primary: '#CD7353',
-  sage: '#7C9E7A',
-  amber: '#F59E0B',
+  bg: colors.background.base,
+  surface: colors.surface.card,
+  border: colors.border.default,
+  text: colors.text.primary,
+  textMuted: colors.text.tertiary,
+  primary: colors.terracotta[500],
+  sage: colors.sage[500],
+  amber: colors.warning.base,
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  container: { flex: 1, backgroundColor: C.bg },
-  content: { paddingHorizontal: 20, paddingBottom: 24 },
+  content: { paddingTop: spacing[1] },
 
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingTop: 8, marginBottom: 6 },
+  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing[2] },
   greeting: { fontSize: 24, fontWeight: '700', color: C.text },
   dateLabel: { fontSize: 13, color: C.textMuted, marginTop: 2 },
-  avatarCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#F3F2EE', alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  avatarCircle: { width: 48, height: 48, borderRadius: radius.pill, backgroundColor: colors.background.soft, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   notifDot: { position: 'absolute', top: 2, right: 2, width: 10, height: 10, borderRadius: 5, backgroundColor: C.primary, borderWidth: 2, borderColor: C.bg },
-  householdName: { fontSize: 13, color: C.primary, marginBottom: 16 },
+  householdName: { marginBottom: spacing[4] },
 
-  card: { backgroundColor: C.surface, borderRadius: 16, padding: 16, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 2, borderWidth: 1, borderColor: C.border },
+  card: { backgroundColor: C.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[4], ...shadows.card, borderWidth: 1, borderColor: C.border },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: C.text, marginBottom: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   seeAll: { fontSize: 13, color: C.primary, fontWeight: '600' },
@@ -298,8 +297,8 @@ const styles = StyleSheet.create({
   badgeText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
   muted: { color: C.textMuted, fontSize: 14 },
 
-  statusCard: { backgroundColor: C.surface, borderRadius: 16, padding: 16, marginBottom: 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 2 },
-  toggleRow: { flexDirection: 'row', backgroundColor: '#F3F2EE', borderRadius: 14, padding: 4, marginBottom: 10, width: '100%' },
+  statusCard: { marginTop: spacing[2], marginBottom: spacing[5] },
+  toggleRow: { flexDirection: 'row', gap: spacing[2], marginBottom: spacing[3], width: '100%', justifyContent: 'center' },
   toggleOption: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   toggleActive: { backgroundColor: C.sage },
   toggleActiveOut: { backgroundColor: C.amber },
@@ -340,10 +339,10 @@ const styles = StyleSheet.create({
   calDot: { width: 6, height: 6, borderRadius: 3 },
   nextEvent: { fontSize: 13, color: C.textMuted, textAlign: 'center', marginTop: -4, marginBottom: 16 },
 
-  wellbeingCard: { marginTop: 8 },
-  wellbeingTitle: { fontSize: 16, fontWeight: '600', color: C.text, marginBottom: 14, textAlign: 'center' },
+  wellbeingCard: { marginTop: spacing[2] },
+  wellbeingTitle: { marginBottom: spacing[4] },
   emojiRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  emojiBtn: { padding: 8, borderRadius: 12 },
-  emojiBtnSelected: { backgroundColor: C.primary + '22', transform: [{ scale: 1.2 }] },
-  wellbeingThanks: { fontSize: 13, color: C.textMuted, textAlign: 'center', marginTop: 12 },
+  emojiBtn: { minHeight: 44, minWidth: 44, padding: spacing[2], borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
+  emojiBtnSelected: { backgroundColor: colors.terracotta[50], transform: [{ scale: 1.08 }] },
+  wellbeingThanks: { marginTop: spacing[3] },
 });

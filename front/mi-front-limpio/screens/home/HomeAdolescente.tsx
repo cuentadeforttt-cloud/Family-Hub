@@ -7,9 +7,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
+import { AppCard, AppScreen, AppText } from '../../components/ui';
+import { colors, radius, shadows, spacing } from '../../constants/theme';
 import { HomePlannerSections } from './HomePlannerSections';
 
 type Task = any;
@@ -89,43 +90,41 @@ export const HomeAdolescente = () => {
   const currentMood = MOODS[mood];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <AppScreen scroll bottomInset="tab" contentContainerStyle={styles.content}>
 
-        {/* Hero gradient header */}
-        <View style={styles.heroHeader}>
+        {/* Hero header */}
+        <AppCard variant="warning" padding="generous" style={styles.heroHeader}>
           <View style={styles.heroContent}>
-            <Text style={styles.greeting}>¡Hola, {firstName}! 👋</Text>
+            <AppText variant="title2">Hola, {firstName}</AppText>
             <View style={styles.xpRow}>
-              <Text style={styles.xpLabel}>Nivel 4 · {totalXp}/{MAX_XP} XP</Text>
+              <AppText variant="caption" tone="secondary" weight="700">Nivel 4 - {totalXp}/{MAX_XP} XP</AppText>
               <View style={styles.xpBar}>
                 <View style={[styles.xpFill, { width: `${Math.min(100, (totalXp / MAX_XP) * 100)}%` as any }]} />
               </View>
             </View>
           </View>
           <View style={styles.streakBadge}>
-            <Text style={styles.streakText}>🔥 {streak} días</Text>
+            <AppText variant="micro" tone="warning" weight="700">{streak} dias</AppText>
           </View>
-        </View>
+        </AppCard>
 
-        <HomePlannerSections variant="dark" />
+        <HomePlannerSections />
 
         {/* Mood ring */}
-        <View style={styles.moodCard}>
+        <AppCard variant="default" padding="generous" style={styles.moodCard}>
           <View style={[styles.moodRing, { borderColor: currentMood.ring, shadowColor: currentMood.ring }]}>
             <Text style={styles.moodEmoji}>{currentMood.emoji}</Text>
           </View>
-          <Text style={styles.moodLabel}>{currentMood.label}</Text>
-          <Text style={styles.moodHint}>¿Cómo estás hoy? Toca para cambiar</Text>
+          <AppText variant="title3" align="center">{currentMood.label}</AppText>
+          <AppText variant="caption" tone="tertiary" align="center" style={styles.moodHint}>Como estas hoy? Toca para cambiar</AppText>
           <View style={styles.moodOptions}>
             {MOODS.map((m, i) => (
-              <TouchableOpacity key={i} onPress={() => setMood(i)} style={[styles.moodBtn, mood === i && { transform: [{ scale: 1.3 }] }]}>
+              <TouchableOpacity key={i} onPress={() => setMood(i)} style={[styles.moodBtn, mood === i && { transform: [{ scale: 1.12 }] }]}>
                 <Text style={{ fontSize: 22 }}>{m.emoji}</Text>
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-
+        </AppCard>
         {false ? (
           <>
         {/* Quests */}
@@ -195,25 +194,25 @@ export const HomeAdolescente = () => {
         ) : null}
 
         {/* Family activity */}
-        <Text style={styles.sectionTitle}>👨‍👩‍👧 En la familia</Text>
-        <View style={styles.scheduleCard}>
+        <AppText variant="title2" style={styles.sectionTitle}>En la familia</AppText>
+        <AppCard variant="default" padding="default" style={styles.scheduleCard}>
           {MOCK_ACTIVITY.map((a, idx) => (
             <View key={a.id} style={[styles.activityRow, idx < MOCK_ACTIVITY.length - 1 && styles.scheduleRowBorder]}>
               <Text style={{ fontSize: 26 }}>{a.avatar}</Text>
-              <Text style={styles.activityText}>
-                <Text style={styles.activityName}>{a.name}</Text> {a.text}
-              </Text>
+              <AppText variant="bodySmall" tone="secondary" style={styles.activityText}>
+                <AppText variant="bodySmall" weight="700">{a.name}</AppText> {a.text}
+              </AppText>
               <TouchableOpacity style={styles.reactBtn}>
-                <Text style={{ fontSize: 16 }}>➕</Text>
+                <Text style={{ fontSize: 16 }}>+</Text>
               </TouchableOpacity>
             </View>
           ))}
-        </View>
+        </AppCard>
 
         {/* Family challenge */}
-        <View style={styles.challengeCard}>
-          <Text style={styles.challengeLabel}>🏆 DESAFÍO FAMILIAR · SEMANA</Text>
-          <Text style={styles.challengeTitle}>{MOCK_CHALLENGE.title}</Text>
+        <AppCard variant="warning" padding="default" style={styles.challengeCard}>
+          <AppText variant="micro" tone="warning" weight="700" style={styles.challengeLabel}>DESAFIO FAMILIAR - SEMANA</AppText>
+          <AppText variant="title3" style={styles.challengeTitle}>{MOCK_CHALLENGE.title}</AppText>
           <View style={styles.challengeMembers}>
             {MOCK_CHALLENGE.members.map(m => (
               <View key={m.name} style={styles.challengeMember}>
@@ -221,71 +220,64 @@ export const HomeAdolescente = () => {
                 <View style={styles.challengeBarBg}>
                   <View style={[styles.challengeBarFill, { width: `${m.pct}%` as any }]} />
                 </View>
-                <Text style={styles.challengePct}>{m.pct}%</Text>
+                <AppText variant="micro" tone="tertiary" style={styles.challengePct}>{m.pct}%</AppText>
               </View>
             ))}
           </View>
           <View style={styles.groupBarBg}>
             <View style={[styles.groupBarFill, { width: '74%' }]} />
           </View>
-          <Text style={styles.challengeMotivation}>¡Casi llegan! 🔥 74% grupal</Text>
-        </View>
+          <AppText variant="caption" tone="warning" weight="700" align="center">Casi llegan: 74% grupal</AppText>
+        </AppCard>
 
         {/* Private space */}
         <TouchableOpacity style={styles.privateCard}>
           <Text style={styles.lockIcon}>🔒</Text>
           <View style={{ flex: 1 }}>
-            <Text style={styles.privateTitle}>Mi espacio privado</Text>
-            <Text style={styles.privateSubtitle}>Próximamente</Text>
+            <AppText variant="bodySmall" tone="secondary" weight="700">Mi espacio privado</AppText>
+            <AppText variant="caption" tone="tertiary">Proximamente</AppText>
           </View>
-          <Text style={styles.privateArrow}>›</Text>
+          <AppText variant="title3" tone="tertiary">›</AppText>
         </TouchableOpacity>
-
         <View style={{ height: 40 }} />
-      </ScrollView>
-    </SafeAreaView>
+    </AppScreen>
   );
 };
 
 const C = {
-  bg: '#0F172A',
-  surface: '#1E293B',
-  border: 'rgba(107,79,232,0.2)',
-  text: '#FFFFFF',
-  textMuted: '#94A3B8',
-  violet: '#6B4FE8',
-  primary: '#CD7353',
-  gold: '#D4A853',
+  bg: colors.background.base,
+  surface: colors.surface.card,
+  border: colors.border.subtle,
+  text: colors.text.primary,
+  textMuted: colors.text.tertiary,
+  violet: colors.terracotta[400],
+  primary: colors.terracotta[500],
+  gold: colors.sand[500],
 };
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg },
-  container: { flex: 1, backgroundColor: C.bg },
-  content: { paddingHorizontal: 20, paddingBottom: 24 },
+  content: { paddingTop: spacing[1] },
 
   heroHeader: {
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
-    backgroundColor: C.violet,
-    marginHorizontal: -20, paddingHorizontal: 20, paddingVertical: 20,
-    paddingTop: 16, marginBottom: 20,
-    borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
+    marginBottom: spacing[5],
   },
   heroContent: { flex: 1 },
-  greeting: { fontSize: 26, fontWeight: '800', color: '#FFFFFF', marginBottom: 10 },
+  greeting: { marginBottom: spacing[2] },
   xpRow: { gap: 4 },
   xpLabel: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
-  xpBar: { height: 8, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 4, overflow: 'hidden' },
-  xpFill: { height: 8, backgroundColor: '#FFFFFF', borderRadius: 4 },
-  streakBadge: { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  xpBar: { height: 8, backgroundColor: colors.sand[100], borderRadius: radius.pill, overflow: 'hidden' },
+  xpFill: { height: 8, backgroundColor: C.primary, borderRadius: radius.pill },
+  streakBadge: { backgroundColor: colors.warning.soft, borderRadius: radius.pill, paddingHorizontal: spacing[3], paddingVertical: spacing[2] },
   streakText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 
-  moodCard: { backgroundColor: C.surface, borderRadius: 20, padding: 20, marginBottom: 20, alignItems: 'center', borderWidth: 1, borderColor: C.border },
-  moodRing: { width: 90, height: 90, borderRadius: 45, borderWidth: 4, alignItems: 'center', justifyContent: 'center', marginBottom: 8, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
+  moodCard: { marginBottom: spacing[5], alignItems: 'center' },
+  moodRing: { width: 90, height: 90, borderRadius: radius.pill, borderWidth: 3, alignItems: 'center', justifyContent: 'center', marginBottom: spacing[2], backgroundColor: colors.background.soft },
   moodEmoji: { fontSize: 44 },
   moodLabel: { fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 4 },
-  moodHint: { fontSize: 12, color: C.textMuted, marginBottom: 12 },
+  moodHint: { marginBottom: spacing[3], marginTop: spacing[1] },
   moodOptions: { flexDirection: 'row', gap: 12 },
-  moodBtn: { padding: 4 },
+  moodBtn: { minHeight: 44, minWidth: 44, padding: spacing[2], alignItems: 'center', justifyContent: 'center', borderRadius: radius.lg },
 
   sectionTitle: { fontSize: 18, fontWeight: '800', color: C.text, marginBottom: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
@@ -306,9 +298,9 @@ const styles = StyleSheet.create({
   questCheck: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: C.violet, alignItems: 'center', justifyContent: 'center' },
   questCheckDone: { backgroundColor: '#22C55E', borderColor: '#22C55E' },
 
-  scheduleCard: { backgroundColor: C.surface, borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: C.border },
+  scheduleCard: { marginBottom: spacing[5] },
   scheduleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
-  scheduleRowBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
+  scheduleRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.border.subtle },
   scheduleTime: { fontSize: 13, color: C.textMuted, fontWeight: '600', width: 44 },
   scheduleTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: C.text },
   activityRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 10 },
@@ -316,19 +308,19 @@ const styles = StyleSheet.create({
   activityText: { flex: 1, fontSize: 13, color: C.textMuted, lineHeight: 18 },
   reactBtn: { padding: 4 },
 
-  challengeCard: { backgroundColor: C.surface, borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1.5, borderTopColor: C.violet, borderColor: C.border },
+  challengeCard: { marginBottom: spacing[5] },
   challengeLabel: { fontSize: 10, fontWeight: '800', color: C.gold, letterSpacing: 0.8, marginBottom: 6 },
   challengeTitle: { fontSize: 16, fontWeight: '700', color: C.text, marginBottom: 14 },
   challengeMembers: { gap: 8, marginBottom: 12 },
   challengeMember: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  challengeBarBg: { flex: 1, height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
-  challengeBarFill: { height: 6, backgroundColor: C.violet, borderRadius: 3 },
+  challengeBarBg: { flex: 1, height: 6, backgroundColor: colors.sand[100], borderRadius: radius.pill, overflow: 'hidden' },
+  challengeBarFill: { height: 6, backgroundColor: C.primary, borderRadius: radius.pill },
   challengePct: { fontSize: 11, color: C.textMuted, width: 32, textAlign: 'right' },
-  groupBarBg: { height: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden', marginBottom: 8 },
-  groupBarFill: { height: 8, backgroundColor: C.gold, borderRadius: 4 },
+  groupBarBg: { height: 8, backgroundColor: colors.sand[100], borderRadius: radius.pill, overflow: 'hidden', marginBottom: spacing[2] },
+  groupBarFill: { height: 8, backgroundColor: C.gold, borderRadius: radius.pill },
   challengeMotivation: { fontSize: 13, color: C.gold, fontWeight: '600', textAlign: 'center' },
 
-  privateCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: C.border, gap: 10 },
+  privateCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.surface, borderRadius: radius.xl, padding: spacing[4], marginBottom: spacing[2], borderWidth: 1, borderColor: colors.border.default, gap: spacing[3], ...shadows.card },
   lockIcon: { fontSize: 22 },
   privateTitle: { fontSize: 14, fontWeight: '600', color: C.textMuted },
   privateSubtitle: { fontSize: 12, color: C.textMuted + '88', marginTop: 2 },

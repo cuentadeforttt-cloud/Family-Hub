@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { ApiError } from '../../services/api';
 import { listPlannerEvents, type PlannerEvent } from '../../services/plannerEvents';
@@ -7,23 +7,11 @@ import { getPlannerSummary, type PlannerSummary } from '../../services/plannerSu
 import { listPlannerTasks, type PlannerTask } from '../../services/plannerTasks';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
+import { ActionPill, AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
+import { colors, radius, spacing } from '../../constants/theme';
 
 type Props = {
   variant?: 'light' | 'dark';
-};
-
-const C = {
-  bg: '#FFFFFF',
-  bgDark: '#161B22',
-  border: '#E2DFD6',
-  borderDark: 'rgba(205,115,83,0.22)',
-  text: '#17201A',
-  textDark: '#FFFFFF',
-  muted: '#647067',
-  mutedDark: '#C8C8C8',
-  primary: '#CD7353',
-  sage: '#7C9E7A',
-  danger: '#A33A2B',
 };
 
 const toDateOnly = (date: Date) => {
@@ -152,6 +140,7 @@ export function HomePlannerSections({ variant = 'light' }: Props) {
   const navigation = useNavigation<any>();
   const { error, events, loading, memberNameById, summary, tasks } = useHomePlannerData();
   const dark = variant === 'dark';
+  const cardVariant = dark ? 'glass' : 'default';
 
   const openPlanner = (initialTab: 'tasks' | 'calendar', initialSheet?: 'task' | 'event') => {
     navigation.navigate('PlannerTab', {
@@ -165,143 +154,160 @@ export function HomePlannerSections({ variant = 'light' }: Props) {
     });
   };
 
-  const mock = (label: string) => Alert.alert(label, 'Próximamente.');
+  const mock = (label: string) => Alert.alert(label, 'Proximamente.');
 
   return (
-    <View>
+    <View style={styles.container}>
       <View style={styles.actionsRow}>
-        <TouchableOpacity style={styles.primaryAction} onPress={() => openPlanner('tasks', 'task')}>
-          <Text style={styles.primaryActionText}>Crear tarea</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryAction} onPress={() => openPlanner('calendar', 'event')}>
-          <Text style={styles.secondaryActionText}>Crear evento</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.mockAction} onPress={() => mock('Preguntar a Geni')}>
-          <Text style={styles.mockActionText}>Geni</Text>
-        </TouchableOpacity>
+        <ActionPill label="Crear tarea" selected onPress={() => openPlanner('tasks', 'task')} />
+        <ActionPill label="Crear evento" tone="primary" onPress={() => openPlanner('calendar', 'event')} />
+        <ActionPill label="Geni" tone="success" onPress={() => mock('Preguntar a Geni')} />
       </View>
 
       {error ? (
-        <View style={[styles.card, dark && styles.cardDark]}>
-          <Text style={[styles.errorText]}>{error}</Text>
-        </View>
+        <ErrorState title="No pudimos cargar Planner" description={error} style={styles.stateCard} />
       ) : null}
 
       {summary && (summary.overdue_tasks_count > 0 || summary.awaiting_verification_count > 0) ? (
-        <View style={[styles.card, dark && styles.cardDark]}>
-          <Text style={[styles.cardTitle, dark && styles.cardTitleDark]}>Atención requerida</Text>
+        <AppCard variant="warning" padding="default" highlighted style={styles.card}>
+          <AppText variant="title3" tone="warning">
+            Atencion requerida
+          </AppText>
           {summary.overdue_tasks_count > 0 ? (
-            <Text style={[styles.meta, dark && styles.metaDark]}>{summary.overdue_tasks_count} tareas vencidas</Text>
+            <AppText variant="bodySmall" tone="secondary">
+              {summary.overdue_tasks_count} tareas vencidas
+            </AppText>
           ) : null}
           {summary.awaiting_verification_count > 0 ? (
-            <Text style={[styles.meta, dark && styles.metaDark]}>{summary.awaiting_verification_count} por verificar</Text>
+            <AppText variant="bodySmall" tone="secondary">
+              {summary.awaiting_verification_count} por verificar
+            </AppText>
           ) : null}
-        </View>
+        </AppCard>
       ) : null}
 
-      <View style={[styles.card, dark && styles.cardDark]}>
+      <AppCard variant={cardVariant} padding="default" style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, dark && styles.cardTitleDark]}>Tareas del hogar</Text>
-          <TouchableOpacity onPress={() => openPlanner('tasks')}>
-            <Text style={styles.linkText}>Ver tareas</Text>
+          <AppText variant="title3" tone={dark ? 'inverse' : 'primary'}>
+            Tareas del hogar
+          </AppText>
+          <TouchableOpacity onPress={() => openPlanner('tasks')} accessibilityRole="button">
+            <AppText variant="caption" tone="warning" weight="700">
+              Ver tareas
+            </AppText>
           </TouchableOpacity>
         </View>
         {loading ? (
-          <ActivityIndicator color={C.primary} style={{ marginVertical: 12 }} />
+          <Skeleton variant="paragraph" lines={3} style={styles.skeletonBlock} />
         ) : tasks.length === 0 ? (
-          <Text style={[styles.emptyText, dark && styles.metaDark]}>Sin tareas pendientes.</Text>
+          <View style={styles.emptyInline}>
+            <AppText variant="bodySmall" tone={dark ? 'inverse' : 'secondary'}>
+              Sin tareas pendientes.
+            </AppText>
+          </View>
         ) : tasks.map((task) => {
           const assignedName = task.assigned_to_member_id
             ? memberNameById.get(task.assigned_to_member_id) ?? task.assigned_member?.display_name ?? 'Miembro'
             : 'Sin asignar';
 
           return (
-            <TouchableOpacity key={task.id} style={styles.itemRow} onPress={() => openPlanner('tasks')}>
+            <TouchableOpacity
+              key={task.id}
+              style={styles.itemRow}
+              onPress={() => openPlanner('tasks')}
+              accessibilityRole="button"
+            >
               <View style={{ flex: 1 }}>
-                <Text style={[styles.itemTitle, dark && styles.itemTitleDark]}>{task.title}</Text>
-                <Text style={[styles.meta, dark && styles.metaDark]}>
-                  {task.category || task.template_key || 'Sin categoría'} · {formatDate(task.due_date)} · {assignedName}
-                </Text>
+                <AppText variant="bodySmall" tone={dark ? 'inverse' : 'primary'} weight="700">
+                  {task.title}
+                </AppText>
+                <AppText variant="caption" tone={dark ? 'tertiary' : 'secondary'}>
+                  {task.category || task.template_key || 'Sin categoria'} - {formatDate(task.due_date)} - {assignedName}
+                </AppText>
               </View>
-              <Text style={styles.statusText}>{taskStatusLabel[task.status]}</Text>
+              <View style={styles.statusPill}>
+                <AppText variant="micro" tone="success" weight="700">
+                  {taskStatusLabel[task.status]}
+                </AppText>
+              </View>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </AppCard>
 
-      <View style={[styles.card, dark && styles.cardDark]}>
+      <AppCard variant={cardVariant} padding="default" style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, dark && styles.cardTitleDark]}>Próximos eventos</Text>
-          <TouchableOpacity onPress={() => openPlanner('calendar')}>
-            <Text style={styles.linkText}>Ver calendario</Text>
+          <AppText variant="title3" tone={dark ? 'inverse' : 'primary'}>
+            Proximos eventos
+          </AppText>
+          <TouchableOpacity onPress={() => openPlanner('calendar')} accessibilityRole="button">
+            <AppText variant="caption" tone="warning" weight="700">
+              Ver calendario
+            </AppText>
           </TouchableOpacity>
         </View>
         {loading ? (
-          <ActivityIndicator color={C.primary} style={{ marginVertical: 12 }} />
+          <Skeleton variant="paragraph" lines={3} style={styles.skeletonBlock} />
         ) : events.length === 0 ? (
-          <Text style={[styles.emptyText, dark && styles.metaDark]}>Sin eventos próximos.</Text>
+          <View style={styles.emptyInline}>
+            <AppText variant="bodySmall" tone={dark ? 'inverse' : 'secondary'}>
+              Sin eventos proximos.
+            </AppText>
+          </View>
         ) : events.map((event) => (
-          <TouchableOpacity key={event.id} style={styles.itemRow} onPress={() => openPlanner('calendar')}>
+          <TouchableOpacity
+            key={event.id}
+            style={styles.itemRow}
+            onPress={() => openPlanner('calendar')}
+            accessibilityRole="button"
+          >
             <View style={{ flex: 1 }}>
-              <Text style={[styles.itemTitle, dark && styles.itemTitleDark]}>{event.title}</Text>
-              <Text style={[styles.meta, dark && styles.metaDark]}>
-                {formatDate(event.starts_at)} {event.all_day ? 'Todo el día' : formatTime(event.starts_at)}
-                {event.location_name ? ` · ${event.location_name}` : ''}
-              </Text>
+              <AppText variant="bodySmall" tone={dark ? 'inverse' : 'primary'} weight="700">
+                {event.title}
+              </AppText>
+              <AppText variant="caption" tone={dark ? 'tertiary' : 'secondary'}>
+                {formatDate(event.starts_at)} {event.all_day ? 'Todo el dia' : formatTime(event.starts_at)}
+                {event.location_name ? ` - ${event.location_name}` : ''}
+              </AppText>
             </View>
           </TouchableOpacity>
         ))}
-      </View>
+      </AppCard>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  actionsRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 },
-  primaryAction: { backgroundColor: C.primary, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 9 },
-  primaryActionText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
-  secondaryAction: {
-    backgroundColor: '#FFFFFF',
-    borderColor: C.primary,
-    borderWidth: 1,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+  container: { gap: spacing[3] },
+  actionsRow: { flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap', marginBottom: spacing[1] },
+  card: { marginBottom: spacing[1] },
+  stateCard: { marginBottom: spacing[1] },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[3],
+    marginBottom: spacing[2],
   },
-  secondaryActionText: { color: C.primary, fontSize: 13, fontWeight: '800' },
-  mockAction: {
-    backgroundColor: '#ECF3EA',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  mockActionText: { color: '#496E47', fontSize: 13, fontWeight: '800' },
-  card: {
-    backgroundColor: C.bg,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  cardDark: { backgroundColor: C.bgDark, borderColor: C.borderDark },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 },
-  cardTitle: { color: C.text, fontSize: 17, fontWeight: '900' },
-  cardTitleDark: { color: C.textDark },
-  linkText: { color: C.primary, fontSize: 13, fontWeight: '900' },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 9,
+    gap: spacing[3],
+    minHeight: 44,
+    paddingVertical: spacing[3],
     borderTopWidth: 1,
-    borderTopColor: 'rgba(124,158,122,0.16)',
+    borderTopColor: colors.border.subtle,
   },
-  itemTitle: { color: C.text, fontSize: 14, fontWeight: '800' },
-  itemTitleDark: { color: C.textDark },
-  meta: { color: C.muted, fontSize: 12, lineHeight: 18, marginTop: 2 },
-  metaDark: { color: C.mutedDark },
-  statusText: { color: C.sage, fontSize: 11, fontWeight: '900' },
-  emptyText: { color: C.muted, fontSize: 14 },
-  errorText: { color: C.danger, fontSize: 14, lineHeight: 20 },
+  statusPill: {
+    backgroundColor: colors.success.soft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+  },
+  emptyInline: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingTop: spacing[2],
+  },
+  skeletonBlock: { paddingVertical: spacing[2] },
 });
