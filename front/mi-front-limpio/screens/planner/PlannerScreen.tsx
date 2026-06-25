@@ -15,7 +15,16 @@ import { plannerStyles as S } from './plannerShared';
 type PlannerInternalTab = 'tasks' | 'calendar' | 'goals';
 type PlannerSheet =
   | { type: 'task'; mode: 'create' | 'edit'; id?: string }
-  | { type: 'event'; mode: 'create' | 'edit'; id?: string };
+  | {
+      type: 'event';
+      mode: 'create' | 'edit';
+      id?: string;
+      baseEventId?: string;
+      occurrenceId?: string;
+      occurrenceStartsAt?: string;
+      occurrenceEndsAt?: string;
+      isGeneratedRecurringOccurrence?: boolean;
+    };
 
 export function PlannerScreen() {
   const route = useRoute<any>();
@@ -194,7 +203,22 @@ export function PlannerScreen() {
             refreshKey={refreshKey}
             onChanged={changed}
             onCreateEvent={() => setSheet({ type: 'event', mode: 'create' })}
-            onEditEvent={(id) => setSheet({ type: 'event', mode: 'edit', id })}
+            onEditEvent={(eventId, context) =>
+              setSheet(
+                context?.isGeneratedRecurringOccurrence
+                  ? {
+                      type: 'event',
+                      mode: 'edit',
+                      id: eventId,
+                      baseEventId: context.baseEventId,
+                      occurrenceId: context.occurrenceId,
+                      occurrenceStartsAt: context.occurrenceStartsAt,
+                      occurrenceEndsAt: context.occurrenceEndsAt,
+                      isGeneratedRecurringOccurrence: true,
+                    }
+                  : { type: 'event', mode: 'edit', id: eventId },
+              )
+            }
             onEditTask={(id) => setSheet({ type: 'task', mode: 'edit', id })}
           />
         ) : null}

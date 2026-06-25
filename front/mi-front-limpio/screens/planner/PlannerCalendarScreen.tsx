@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 import { ApiError } from '../../services/api';
 import { getPlannerCalendar, type PlannerCalendarEventItem, type PlannerCalendarItem, type PlannerCalendarView } from '../../services/plannerCalendar';
-import { cancelPlannerEvent, createEventOccurrenceOverride } from '../../services/plannerEvents';
+import { cancelPlannerEvent } from '../../services/plannerEvents';
 import { completePlannerTask } from '../../services/plannerTasks';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -17,35 +17,20 @@ import {
   statusLabels,
 } from './plannerShared';
 
-const resolveEventEditId = async (item: PlannerCalendarEventItem, accessToken: string | undefined, loadCalendar: () => Promise<void>): Promise<string | null> => {
-  if (!accessToken) {
-    Alert.alert('Planner', 'No hay sesion activa para editar el evento.');
-    return null;
-  }
-
-  if (item.is_recurring_occurrence && !item.is_override) {
-    try {
-      const response = await createEventOccurrenceOverride(accessToken, item.id, {
-        original_occurrence_start_at: item.starts_at,
-        starts_at: item.starts_at,
-        ends_at: item.ends_at ?? undefined,
-      });
-      await loadCalendar();
-      return response.event.id;
-    } catch (err) {
-      Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos crear el override del evento.');
-      return null;
-    }
-  }
-
-  return item.id;
-};
-
 type Props = {
   refreshKey?: number;
   onChanged?: () => void;
   onCreateEvent?: () => void;
-  onEditEvent?: (eventId: string) => void;
+  onEditEvent?: (
+    eventId: string,
+    context?: {
+      baseEventId?: string;
+      occurrenceId?: string;
+      occurrenceStartsAt?: string;
+      occurrenceEndsAt?: string;
+      isGeneratedRecurringOccurrence?: boolean;
+    },
+  ) => void;
   onEditTask?: (taskId: string) => void;
 };
 
@@ -156,11 +141,20 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
     }
   };
 
-  const handleEditEvent = async (item: PlannerCalendarEventItem) => {
-    const eventId = await resolveEventEditId(item, accessToken, loadCalendar);
-    if (!eventId) return;
-    onEditEvent?.(eventId);
-  };
+const handleEditEvent = (item: PlannerCalendarEventItem) => {
+  const context =
+    item.is_recurring_occurrence && !item.is_override
+      ? {
+          baseEventId: item.id,
+          occurrenceId: item.occurrence_id,
+          occurrenceStartsAt: item.starts_at,
+          occurrenceEndsAt: item.ends_at ?? undefined,
+          isGeneratedRecurringOccurrence: true,
+        }
+      : undefined;
+
+  onEditEvent?.(item.id, context);
+};
 
   const confirmCancelEvent = (eventId: string) => {
     if (!accessToken) return;

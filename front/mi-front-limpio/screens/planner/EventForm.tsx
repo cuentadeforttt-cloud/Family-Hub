@@ -14,6 +14,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { ApiError } from '../../services/api';
 import {
   cancelPlannerEvent,
+  createEventOccurrenceOverride,
   createPlannerEvent,
   listPlannerEvents,
   updatePlannerEvent,
@@ -27,6 +28,11 @@ type EventFormProps = {
   mode: 'create' | 'edit';
   embedded?: boolean;
   eventId?: string;
+  baseEventId?: string;
+  occurrenceId?: string;
+  occurrenceStartsAt?: string;
+  occurrenceEndsAt?: string;
+  isGeneratedRecurringOccurrence?: boolean;
   onClose?: () => void;
   onSaved?: (message: string) => void;
 };
@@ -46,6 +52,11 @@ export function EventForm({
   mode,
   embedded = false,
   eventId: eventIdProp,
+  baseEventId,
+  occurrenceId,
+  occurrenceStartsAt,
+  occurrenceEndsAt,
+  isGeneratedRecurringOccurrence,
   onClose,
   onSaved,
 }: EventFormProps) {
@@ -58,6 +69,7 @@ export function EventForm({
   const [loading, setLoading] = useState(mode === 'edit');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editScope, setEditScope] = useState<'occurrence' | 'series'>('occurrence');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(dateToYMD(new Date()));
@@ -66,6 +78,28 @@ export function EventForm({
   const [allDay, setAllDay] = useState(false);
   const [locationName, setLocationName] = useState('');
   const [recurrence, setRecurrence] = useState<PlannerEventRecurrence>('none');
+
+  const isFormReadyForSubmit = React.useMemo(() => {
+    if (authLoading || loading || saving) return false;
+    if (!accessToken) return false;
+    if (!title.trim()) return false;
+
+    if (mode === 'create') {
+      return true;
+    }
+    if (mode === 'edit' && eventId) {
+      if (isGeneratedRecurringOccurrence) {
+        if (editScope === 'occurrence') {
+          return Boolean(baseEventId && occurrenceStartsAt);
+        }
+        if (editScope === 'series') {
+          return Boolean(baseEventId);
+        }
+      }
+      return true;
+    }
+    return false;
+  }, [authLoading, loading, saving, accessToken, title, mode, eventId, isGeneratedRecurringOccurrence, editScope, baseEventId, occurrenceStartsAt]);
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -79,7 +113,7 @@ export function EventForm({
           from: '2020-01-01T00:00:00.000Z',
           to: '2100-12-31T23:59:59.999Z',
           include_cancelled: true,
-          include_recurring: false,
+          include_recurring: true,
         });
         const event = events.find((item) => item.id === eventId);
 
@@ -115,14 +149,41 @@ export function EventForm({
   }, [accessToken, eventId, mode, authLoading]);
 
   const submit = async () => {
+    if (authLoading) {
+      const message = 'Estamos preparando tu sesión. Intentá de nuevo en un momento.';
+      setError(message);
+      Alert.alert('Planner', message);
+      return;
+    }
+
+    if (loading) {
+      const message = 'Estamos preparando el formulario. Intentá de nuevo en un momento.';
+      setError(message);
+      Alert.alert('Planner', message);
+      return;
+    }
+
     if (!accessToken) {
-      Alert.alert('Planner', 'Necesitas iniciar sesion nuevamente.');
+      const message = 'No hay sesión activa para guardar el evento.';
+      setError(message);
+      Alert.alert('Planner', message);
       return;
     }
 
     if (!title.trim()) {
       Alert.alert('Planner', 'El titulo es obligatorio.');
       return;
+    }
+
+    if (mode === 'edit' && isGeneratedRecurringOccurrence) {
+      if (editScope === 'occurrence' && (!baseEventId || !occurrenceStartsAt)) {
+        Alert.alert('Planner', 'No hay informacion suficiente para editar este evento recurrente.');
+        return;
+      }
+      if (editScope === 'series' && !baseEventId) {
+        Alert.alert('Planner', 'No hay informacion suficiente para editar este evento recurrente.');
+        return;
+      }
     }
 
     const startsAt = buildLocalIso(date, allDay ? '00:00' : startTime);
@@ -143,12 +204,55 @@ export function EventForm({
       recurrence,
     };
 
+    if (__DEV__) {
+      console.log('[EventForm submit]', {
+        mode,
+        hasAccessToken: Boolean(accessToken),
+        authLoading,
+        eventId,
+        isGeneratedRecurringOccurrence,
+        editScope,
+        baseEventId,
+        occurrenceStartsAt,
+        occurrenceEndsAt,
+        payload,
+      });
+    }
+
     setSaving(true);
     setError(null);
 
     try {
       if (mode === 'edit' && eventId) {
-        await updatePlannerEvent(accessToken, eventId, payload);
+        let targetEventId = eventId;
+
+        if (isGeneratedRecurringOccurrence) {
+          if (editScope === 'occurrence') {
+            if (!baseEventId || !occurrenceStartsAt) {
+              const message = 'No hay informacion suficiente para editar este evento recurrente.';
+              setError(message);
+              Alert.alert('Planner', message);
+              return;
+            }
+
+            const overrideResponse = await createEventOccurrenceOverride(accessToken, baseEventId, {
+              original_occurrence_start_at: occurrenceStartsAt,
+              starts_at: occurrenceStartsAt,
+              ends_at: occurrenceEndsAt ?? undefined,
+            });
+            targetEventId = overrideResponse.event.id;
+          } else if (editScope === 'series') {
+            if (!baseEventId) {
+              const message = 'No hay informacion suficiente para editar este evento recurrente.';
+              setError(message);
+              Alert.alert('Planner', message);
+              return;
+            }
+            targetEventId = baseEventId;
+          }
+        }
+
+        await updatePlannerEvent(accessToken, targetEventId, payload);
         if (onSaved) {
           onSaved('Evento actualizado.');
         } else {
@@ -170,6 +274,15 @@ export function EventForm({
       const message = err instanceof ApiError ? err.message : 'No pudimos guardar el evento.';
       setError(message);
       Alert.alert('Planner', message);
+
+      if (__DEV__ && err instanceof ApiError) {
+        console.error('[EventForm submit error]', {
+          message: err.message,
+          status: err.status,
+          code: err.code,
+          debugMessage: err.debugMessage,
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -238,6 +351,50 @@ export function EventForm({
           </View>
         ) : null}
 
+        {mode === 'edit' && isGeneratedRecurringOccurrence ? (
+          <View style={[S.card, { marginBottom: 18, padding: 12 }]}>
+            <Text style={[S.label, { marginBottom: 8 }]}>Alcance de la edicion</Text>
+            <View style={[S.row, { gap: 8 }]}>
+              <TouchableOpacity
+                style={[
+                  S.chip,
+                  editScope === 'occurrence' && S.chipActive,
+                  { flex: 1, alignItems: 'center', paddingVertical: 10 },
+                ]}
+                onPress={() => setEditScope('occurrence')}
+              >
+                <Text
+                  style={[
+                    S.chipText,
+                    editScope === 'occurrence' && S.chipTextActive,
+                    { fontSize: 13 },
+                  ]}
+                >
+                  Solo este evento
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  S.chip,
+                  editScope === 'series' && S.chipActive,
+                  { flex: 1, alignItems: 'center', paddingVertical: 10 },
+                ]}
+                onPress={() => setEditScope('series')}
+              >
+                <Text
+                  style={[
+                    S.chipText,
+                    editScope === 'series' && S.chipTextActive,
+                    { fontSize: 13 },
+                  ]}
+                >
+                  Toda la serie
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
+
         <Text style={S.label}>Titulo</Text>
         <TextInput style={S.input} value={title} onChangeText={setTitle} placeholder="Ej. Control medico" />
 
@@ -293,7 +450,7 @@ export function EventForm({
         <TouchableOpacity
           style={[S.primaryBtn, saving && { opacity: 0.6 }]}
           onPress={() => void submit()}
-          disabled={saving}
+          disabled={saving || loading || authLoading || !isFormReadyForSubmit}
         >
           <Text style={S.btnText}>{saving ? 'Guardando...' : mode === 'edit' ? 'Guardar cambios' : 'Crear evento'}</Text>
         </TouchableOpacity>
