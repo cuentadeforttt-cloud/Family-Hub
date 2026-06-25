@@ -33,7 +33,7 @@ const filters: Array<{ key: FilterKey; label: string }> = [
 ];
 
 export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEditTask }: Props) {
-  const { session, authMe } = useAuth();
+  const { session, authMe, loading: authLoading } = useAuth();
   const { members } = useHousehold();
   const accessToken = session?.access_token;
 
@@ -44,7 +44,7 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
   const [filter, setFilter] = useState<FilterKey>('open');
 
   const loadTasks = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || authLoading) return;
 
     setLoading(true);
     setError(null);
@@ -57,11 +57,15 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, authLoading]);
 
   useEffect(() => {
+    if (!authLoading && !accessToken) {
+      setLoading(false);
+      return;
+    }
     void loadTasks();
-  }, [loadTasks, refreshKey]);
+  }, [loadTasks, refreshKey, authLoading, accessToken]);
 
   const memberNameById = useMemo(() => {
     const map = new Map<string, string>();

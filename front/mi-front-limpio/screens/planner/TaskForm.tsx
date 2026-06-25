@@ -59,7 +59,7 @@ export function TaskForm({
 }: TaskFormProps) {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { session, authMe } = useAuth();
+  const { session, authMe, loading: authLoading } = useAuth();
   const { members } = useHousehold();
   const accessToken = session?.access_token;
   const taskId = taskIdProp ?? route.params?.taskId as string | undefined;
@@ -90,7 +90,7 @@ export function TaskForm({
 
   useEffect(() => {
     const loadTask = async () => {
-      if (mode !== 'edit' || !accessToken || !taskId) return;
+      if (mode !== 'edit' || !accessToken || !taskId || authLoading) return;
 
       setLoading(true);
       setError(null);
@@ -122,8 +122,14 @@ export function TaskForm({
       }
     };
 
-    void loadTask();
-  }, [accessToken, mode, taskId]);
+    if (mode === 'edit' && authLoading) {
+      setLoading(true);
+    }
+
+    if (mode !== 'edit' || !authLoading) {
+      void loadTask();
+    }
+  }, [accessToken, mode, taskId, authLoading]);
 
   const selectTemplate = (key: ResponsibilityKey) => {
     if (key === 'other') {

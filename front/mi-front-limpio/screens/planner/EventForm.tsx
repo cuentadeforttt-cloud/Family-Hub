@@ -51,7 +51,7 @@ export function EventForm({
 }: EventFormProps) {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const accessToken = session?.access_token;
   const eventId = eventIdProp ?? route.params?.eventId as string | undefined;
 
@@ -69,7 +69,7 @@ export function EventForm({
 
   useEffect(() => {
     const loadEvent = async () => {
-      if (mode !== 'edit' || !accessToken || !eventId) return;
+      if (mode !== 'edit' || !accessToken || !eventId || authLoading) return;
 
       setLoading(true);
       setError(null);
@@ -105,8 +105,14 @@ export function EventForm({
       }
     };
 
-    void loadEvent();
-  }, [accessToken, eventId, mode]);
+    if (mode === 'edit' && authLoading) {
+      setLoading(true);
+    }
+
+    if (mode !== 'edit' || !authLoading) {
+      void loadEvent();
+    }
+  }, [accessToken, eventId, mode, authLoading]);
 
   const submit = async () => {
     if (!accessToken) {

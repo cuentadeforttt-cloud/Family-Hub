@@ -172,12 +172,18 @@ export type MembershipResponse = {
 export class ApiError extends Error {
   status: number;
   code: string | null;
+  debugMessage: string | null;
 
-  constructor(message: string, status: number, code: string | null = null) {
+  constructor(message: string, status: number, code: string | null = null, debugMessage?: string | null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.debugMessage = debugMessage ?? null;
+
+    if (__DEV__ && this.debugMessage) {
+      console.error('[ApiError]', this.debugMessage);
+    }
   }
 }
 
@@ -221,7 +227,9 @@ const getResponseCode = (payload: unknown) => {
 export async function requestJson<T>(path: string, options: RequestJsonOptions = {}): Promise<T> {
   const { method = 'GET', accessToken, body, headers } = options;
 
-  const response = await fetch(buildApiUrl(path), {
+  const fullUrl = buildApiUrl(path);
+
+  const response = await fetch(fullUrl, {
     method,
     headers: {
       Accept: 'application/json',
@@ -233,12 +241,39 @@ export async function requestJson<T>(path: string, options: RequestJsonOptions =
   });
 
   const text = await response.text();
+
+  if (!text) {
+    if (!response.ok) {
+      const debugMsg = `Empty response from ${method} ${path} (status ${response.status})`;
+      throw new ApiError(
+        'No pudimos conectar correctamente con el servidor. Intentá de nuevo.',
+        response.status,
+        'empty_response',
+        debugMsg,
+      );
+    }
+    return {} as T;
+  }
+
   let payload: unknown = null;
 
   try {
-    payload = text ? JSON.parse(text) as unknown : null;
+    payload = JSON.parse(text) as unknown;
   } catch {
-    throw new ApiError('El backend devolvio una respuesta invalida.', response.status, 'invalid_json');
+    const contentType = response.headers.get('content-type') || 'unknown';
+    const bodyPreview = text.slice(0, 200).replace(/\s+/g, ' ');
+    const debugMsg = `Invalid JSON from ${method} ${path} (status ${response.status}, content-type: ${contentType}, body: ${bodyPreview})`;
+    
+    let userMessage = 'No pudimos conectar correctamente con el servidor. Intentá de nuevo.';
+    if (response.status === 401) {
+      userMessage = 'Tu sesión expiró o no está disponible. Volvé a iniciar sesión.';
+    } else if (response.status === 403) {
+      userMessage = 'No tenes permiso para acceder a este recurso.';
+    } else if (response.status === 0 || response.status === undefined) {
+      userMessage = 'No pudimos conectar con el servidor. Revisá tu conexión e intentá de nuevo.';
+    }
+
+    throw new ApiError(userMessage, response.status, 'invalid_json', debugMsg);
   }
 
   if (!response.ok) {

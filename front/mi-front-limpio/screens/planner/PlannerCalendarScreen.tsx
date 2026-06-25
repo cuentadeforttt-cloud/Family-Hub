@@ -65,7 +65,7 @@ const moveDate = (date: Date, view: PlannerCalendarView, direction: -1 | 1) => {
 };
 
 export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, onEditEvent, onEditTask }: Props) {
-  const { session } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const accessToken = session?.access_token;
 
   const [view, setView] = useState<PlannerCalendarView>('month');
@@ -76,7 +76,7 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
   const [error, setError] = useState<string | null>(null);
 
   const loadCalendar = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || authLoading) return;
 
     setLoading(true);
     setError(null);
@@ -92,11 +92,15 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
     } finally {
       setLoading(false);
     }
-  }, [accessToken, selectedDate, view]);
+  }, [accessToken, authLoading, selectedDate, view]);
 
   useEffect(() => {
+    if (!authLoading && !accessToken) {
+      setLoading(false);
+      return;
+    }
     void loadCalendar();
-  }, [loadCalendar, refreshKey]);
+  }, [loadCalendar, refreshKey, authLoading, accessToken]);
 
   const groupedItems = useMemo(() => {
     const groups = new Map<string, PlannerCalendarItem[]>();
