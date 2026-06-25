@@ -20,7 +20,6 @@ import {
   type Invitation,
   type PendingRole,
 } from '../services/invitations';
-import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import type { PrivateStackParamList } from '../navigation/types';
 import type { JoinRequest } from '../services/api';
@@ -38,8 +37,7 @@ const APPROVAL_ROLES: { id: PendingRole; label: string }[] = [
 const shortId = (value: string) => value.length > 8 ? `${value.slice(0, 8)}...` : value;
 
 export const P03InvitarPersonas = ({ navigation, route }: Props) => {
-  const { refetchMe } = useAuth();
-  const { reload } = useHousehold();
+  const { refreshMembers } = useHousehold();
   const { householdId } = route.params;
 
   const [activeInvitation, setActiveInvitation] = useState<Invitation | null>(null);
@@ -147,8 +145,7 @@ export const P03InvitarPersonas = ({ navigation, route }: Props) => {
     } else {
       setSuccessMessage('Solicitud aprobada.');
       await loadRequests();
-      await refetchMe();
-      void reload();
+      await refreshMembers();
     }
 
     setActingRequestId(null);
@@ -166,8 +163,7 @@ export const P03InvitarPersonas = ({ navigation, route }: Props) => {
     } else {
       setSuccessMessage('Solicitud rechazada.');
       await loadRequests();
-      await refetchMe();
-      void reload();
+      await refreshMembers();
     }
 
     setActingRequestId(null);
@@ -175,8 +171,6 @@ export const P03InvitarPersonas = ({ navigation, route }: Props) => {
 
   const handleContinue = () => {
     navigation.replace('HomeTabs');
-    void refetchMe();
-    void reload();
   };
 
   return (

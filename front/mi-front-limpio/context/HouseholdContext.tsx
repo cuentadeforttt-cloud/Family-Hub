@@ -13,6 +13,7 @@ type HouseholdContextType = {
   reloading: boolean;
   householdError: string | null;
   reload: () => Promise<void>;
+  refreshMembers: () => Promise<void>;
 };
 
 const HouseholdContext = createContext<HouseholdContextType | undefined>(undefined);
@@ -141,6 +142,10 @@ export const HouseholdProvider = ({ children }: { children: React.ReactNode }) =
     setReloading(false);
   }, [loadMembers, refetchMe]);
 
+  const refreshMembers = useCallback(async () => {
+    await loadMembers();
+  }, [loadMembers]);
+
   const value = useMemo<HouseholdContextType>(
     () => ({
       currentHousehold,
@@ -151,6 +156,7 @@ export const HouseholdProvider = ({ children }: { children: React.ReactNode }) =
       reloading,
       householdError: authMeError ?? membersError,
       reload,
+      refreshMembers,
     }),
     [
       activeMembership?.role,
@@ -162,6 +168,7 @@ export const HouseholdProvider = ({ children }: { children: React.ReactNode }) =
       membersError,
       reload,
       reloading,
+      refreshMembers,
     ],
   );
 

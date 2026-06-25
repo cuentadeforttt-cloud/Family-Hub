@@ -39,7 +39,7 @@ const shortId = (value: string) => (value.length > 8 ? `${value.slice(0, 8)}...`
 
 export const FamilyScreen = () => {
   const navigation = useNavigation<any>();
-  const { authMe, refetchMe, session } = useAuth();
+  const { authMe, session } = useAuth();
   const {
     currentHousehold,
     currentRole,
@@ -49,6 +49,7 @@ export const FamilyScreen = () => {
     members,
     reload,
     reloading,
+    refreshMembers,
   } = useHousehold();
 
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
@@ -102,10 +103,9 @@ export const FamilyScreen = () => {
   }, [loadRequests]);
 
   const refreshFamily = useCallback(async () => {
-    await refetchMe();
-    await reload();
+    await refreshMembers();
     await loadRequests();
-  }, [loadRequests, refetchMe, reload]);
+  }, [loadRequests, refreshMembers]);
 
   const handleInvite = () => {
     if (!currentHousehold?.id) return;
