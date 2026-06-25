@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
 import { ApiError } from '../../services/api';
-import { getPlannerCalendar, type PlannerCalendarItem, type PlannerCalendarView } from '../../services/plannerCalendar';
-import { cancelPlannerEvent } from '../../services/plannerEvents';
+import { getPlannerCalendar, type PlannerCalendarEventItem, type PlannerCalendarItem, type PlannerCalendarView } from '../../services/plannerCalendar';
+import { cancelPlannerEvent, createEventOccurrenceOverride } from '../../services/plannerEvents';
+import { completePlannerTask } from '../../services/plannerTasks';
 import { useAuth } from '../../context/AuthContext';
 import {
   addDays,
@@ -16,11 +17,36 @@ import {
   statusLabels,
 } from './plannerShared';
 
+const resolveEventEditId = async (item: PlannerCalendarEventItem, accessToken: string | undefined, loadCalendar: () => Promise<void>): Promise<string | null> => {
+  if (!accessToken) {
+    Alert.alert('Planner', 'No hay sesion activa para editar el evento.');
+    return null;
+  }
+
+  if (item.is_recurring_occurrence && !item.is_override) {
+    try {
+      const response = await createEventOccurrenceOverride(accessToken, item.id, {
+        original_occurrence_start_at: item.starts_at,
+        starts_at: item.starts_at,
+        ends_at: item.ends_at ?? undefined,
+      });
+      await loadCalendar();
+      return response.event.id;
+    } catch (err) {
+      Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos crear el override del evento.');
+      return null;
+    }
+  }
+
+  return item.id;
+};
+
 type Props = {
   refreshKey?: number;
   onChanged?: () => void;
   onCreateEvent?: () => void;
   onEditEvent?: (eventId: string) => void;
+  onEditTask?: (taskId: string) => void;
 };
 
 const viewOptions: Array<{ key: PlannerCalendarView; label: string }> = [
@@ -38,7 +64,7 @@ const moveDate = (date: Date, view: PlannerCalendarView, direction: -1 | 1) => {
   return addMonths(date, direction);
 };
 
-export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, onEditEvent }: Props) {
+export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, onEditEvent, onEditTask }: Props) {
   const { session } = useAuth();
   const accessToken = session?.access_token;
 
@@ -60,7 +86,7 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
         view,
         date: dateToYMD(selectedDate),
       });
-      setItems(response.items.filter((item) => item.type === 'event' && item.status !== 'cancelled'));
+      setItems(response.items.filter((item) => item.status !== 'cancelled'));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No pudimos cargar el calendario.');
     } finally {
@@ -108,7 +134,29 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
     return days;
   }, [selectedDate]);
 
-  const completeTask = (_taskId: string) => undefined;
+  const completeTask = async (taskId: string) => {
+    if (!accessToken) {
+      Alert.alert('Planner', 'No hay sesion activa para completar la tarea.');
+      return;
+    }
+
+    setSavingId(taskId);
+    try {
+      await completePlannerTask(accessToken, taskId);
+      await loadCalendar();
+      onChanged?.();
+    } catch (err) {
+      Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos completar la tarea.');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleEditEvent = async (item: PlannerCalendarEventItem) => {
+    const eventId = await resolveEventEditId(item, accessToken, loadCalendar);
+    if (!eventId) return;
+    onEditEvent?.(eventId);
+  };
 
   const confirmCancelEvent = (eventId: string) => {
     if (!accessToken) return;
@@ -256,7 +304,7 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
                         {item.location_name || 'Sin ubicacion'} · {recurrenceLabels[item.recurrence]}
                       </Text>
                       <View style={[S.row, { marginTop: 12 }]}>
-                        <TouchableOpacity style={S.secondaryBtn} onPress={() => onEditEvent?.(item.id)}>
+                        <TouchableOpacity style={S.secondaryBtn} onPress={() => handleEditEvent(item)}>
                           <Text style={S.secondaryText}>Editar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -294,7 +342,7 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
                           <Text style={S.secondaryText}>Completar</Text>
                         </TouchableOpacity>
                       ) : null}
-                      <TouchableOpacity style={S.secondaryBtn} onPress={() => undefined}>
+                      <TouchableOpacity style={S.secondaryBtn} onPress={() => onEditTask?.(item.id)}>
                         <Text style={S.secondaryText}>Editar</Text>
                       </TouchableOpacity>
                     </View>

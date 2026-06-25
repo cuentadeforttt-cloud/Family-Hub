@@ -20,6 +20,7 @@ router.get('/events', eventsController.listEvents)
 router.post('/events', eventsController.createEvent)
 router.patch('/events/:id', eventsController.updateEvent)
 router.delete('/events/:id', eventsController.cancelEvent)
+router.post('/events/:id/occurrences/override', eventsController.createOccurrenceOverride)
 
 router.get('/calendar', calendarController.getCalendar)
 router.get('/summary', summaryController.getSummary)

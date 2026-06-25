@@ -87,3 +87,20 @@ export const cancelPlannerEvent = (accessToken: string, eventId: string) =>
     method: 'DELETE',
     accessToken,
   });
+
+export type CreateOccurrenceOverridePayload = {
+  original_occurrence_start_at: string;
+  starts_at?: string;
+  ends_at?: string;
+};
+
+export const createEventOccurrenceOverride = (
+  accessToken: string,
+  eventId: string,
+  payload: CreateOccurrenceOverridePayload,
+) =>
+  requestJson<PlannerEventResponse>(`/api/planner/events/${eventId}/occurrences/override`, {
+    method: 'POST',
+    accessToken,
+    body: payload,
+  });

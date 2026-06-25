@@ -110,26 +110,41 @@ function EmptyQuickActionScreen() {
 function QuickAddTabButton() {
   const navigation = useNavigation<any>();
   const [visible, setVisible] = React.useState(false);
+  const pendingAction = React.useRef<(() => void) | null>(null);
+
+  const runAfterQuickActionsClosed = (callback: () => void) => {
+    pendingAction.current = callback;
+    setVisible(false);
+  };
+
+  React.useEffect(() => {
+    if (!visible && pendingAction.current) {
+      const action = pendingAction.current;
+      pendingAction.current = null;
+      setTimeout(action, 250);
+    }
+  }, [visible]);
 
   const openPlannerRoute = (initialTab: 'tasks' | 'calendar', initialSheet: 'task' | 'event') => {
-    setVisible(false);
-    navigation.navigate('PlannerTab', {
-      screen: 'PlannerHome',
-      params: {
-        initialTab,
-        initialSheet,
-        sheetKey: Date.now(),
-        refreshKey: Date.now(),
-      },
+    runAfterQuickActionsClosed(() => {
+      navigation.navigate('PlannerTab', {
+        screen: 'PlannerHome',
+        params: {
+          initialTab,
+          initialSheet,
+          sheetKey: Date.now(),
+          refreshKey: Date.now(),
+        },
+      });
     });
   };
 
-  const showSoon = () => {
-    setVisible(false);
-    // Alert is intentionally avoided here to keep the tab button lightweight.
-    navigation.navigate('PlannerTab', {
-      screen: 'PlannerHome',
-      params: { initialTab: 'goals', refreshKey: Date.now() },
+const showSoon = () => {
+    runAfterQuickActionsClosed(() => {
+      navigation.navigate('PlannerTab', {
+        screen: 'PlannerHome',
+        params: { initialTab: 'goals', refreshKey: Date.now() },
+      });
     });
   };
 

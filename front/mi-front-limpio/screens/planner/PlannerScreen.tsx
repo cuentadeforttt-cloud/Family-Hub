@@ -189,12 +189,13 @@ export function PlannerScreen() {
           />
         ) : null}
 
-        {activeTab === 'calendar' ? (
+{activeTab === 'calendar' ? (
           <PlannerCalendarScreen
             refreshKey={refreshKey}
             onChanged={changed}
             onCreateEvent={() => setSheet({ type: 'event', mode: 'create' })}
             onEditEvent={(id) => setSheet({ type: 'event', mode: 'edit', id })}
+            onEditTask={(id) => setSheet({ type: 'task', mode: 'edit', id })}
           />
         ) : null}
 

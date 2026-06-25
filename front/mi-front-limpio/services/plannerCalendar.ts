@@ -16,6 +16,7 @@ export type PlannerCalendarEventItem = {
   location_name?: string | null;
   recurrence: PlannerEventRecurrence;
   is_recurring_occurrence?: boolean;
+  is_override?: boolean;
   status: PlannerEventStatus;
 };
 

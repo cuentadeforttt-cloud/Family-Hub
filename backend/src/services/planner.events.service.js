@@ -263,9 +263,65 @@ const cancelEvent = async (context, eventId) => {
   return { event: data }
 }
 
+const createOccurrenceOverride = async (context, eventId, payload) => {
+  const baseEvent = await getEventOrThrow(context.client, context.householdId, eventId)
+
+  if (baseEvent.recurrence === 'none') {
+    throw createHttpError(400, 'Solo se pueden crear overrides para eventos recurrentes.', 'validation_error')
+  }
+
+  const originalOccurrenceStartAt = parseIsoDate(payload.original_occurrence_start_at, 'original_occurrence_start_at')
+  const startsAt = payload.starts_at ? parseIsoDate(payload.starts_at, 'starts_at') : originalOccurrenceStartAt
+  const endsAt = payload.ends_at ? parseIsoDate(payload.ends_at, 'ends_at') : null
+
+  if (endsAt && endsAt.getTime() < startsAt.getTime()) {
+    throw createHttpError(400, 'ends_at debe ser mayor o igual a starts_at.', 'validation_error')
+  }
+
+  const { data: existingOverride } = await context.client
+    .from('planner_events')
+    .select('*')
+    .eq('parent_event_id', eventId)
+    .eq('original_occurrence_start_at', originalOccurrenceStartAt.toISOString())
+    .eq('household_id', context.householdId)
+    .maybeSingle()
+
+  if (existingOverride) {
+    return { event: existingOverride }
+  }
+
+  const overridePayload = {
+    household_id: context.householdId,
+    parent_event_id: eventId,
+    original_occurrence_start_at: originalOccurrenceStartAt.toISOString(),
+    title: baseEvent.title,
+    description: baseEvent.description,
+    starts_at: startsAt.toISOString(),
+    ends_at: endsAt ? endsAt.toISOString() : null,
+    all_day: baseEvent.all_day,
+    location_name: baseEvent.location_name,
+    recurrence: 'none',
+    status: 'scheduled',
+    created_by_person_id: context.personId,
+  }
+
+  const { data, error } = await context.client
+    .from('planner_events')
+    .insert(overridePayload)
+    .select('*')
+    .single()
+
+  if (error) {
+    throwSupabaseError(error)
+  }
+
+  return { event: data }
+}
+
 module.exports = {
   cancelEvent,
   createEvent,
+  createOccurrenceOverride,
   eventOverlapsRange,
   getEventOrThrow,
   listEvents,

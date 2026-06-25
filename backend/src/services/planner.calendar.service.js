@@ -89,12 +89,34 @@ const eventItem = ({ event, startsAt, endsAt, isRecurringOccurrence }) => ({
   status: event.status,
 })
 
+const overrideEventItem = (override) => ({
+  type: 'event',
+  id: override.id,
+  title: override.title,
+  description: override.description,
+  starts_at: override.starts_at,
+  ends_at: override.ends_at,
+  all_day: override.all_day,
+  location_name: override.location_name,
+  recurrence: override.recurrence,
+  is_recurring_occurrence: false,
+  status: override.status,
+  is_override: true,
+  parent_event_id: override.parent_event_id,
+  original_occurrence_start_at: override.original_occurrence_start_at,
+})
+
+const normalizeOccurrenceKey = (eventId, dateValue) => {
+  const date = new Date(dateValue)
+  return `${eventId}:${date.toISOString()}`
+}
+
 const eventOverlapsRange = (startsAt, endsAt, from, to) => {
   const effectiveEnd = endsAt ?? startsAt
   return startsAt <= to && effectiveEnd >= from
 }
 
-const expandEventOccurrences = (event, from, to) => {
+const expandEventOccurrences = (event, from, to, overridesByParent = new Map()) => {
   const startsAt = new Date(event.starts_at)
   const originalEndsAt = event.ends_at ? new Date(event.ends_at) : null
   const durationMs = originalEndsAt ? originalEndsAt.getTime() - startsAt.getTime() : 0
@@ -120,8 +142,9 @@ const expandEventOccurrences = (event, from, to) => {
 
   while (occurrenceStart <= to) {
     const occurrenceEnd = originalEndsAt ? new Date(occurrenceStart.getTime() + durationMs) : null
+    const overrideKey = normalizeOccurrenceKey(event.id, occurrenceStart)
 
-    if (eventOverlapsRange(occurrenceStart, occurrenceEnd, from, to)) {
+    if (!overridesByParent.has(overrideKey) && eventOverlapsRange(occurrenceStart, occurrenceEnd, from, to)) {
       occurrences.push(
         eventItem({
           event,
@@ -199,9 +222,29 @@ const getCalendar = async (context, query) => {
     throw createHttpError(500, tasksResult.error.message, 'internal_error')
   }
 
-  const eventItems = (eventsResult.data ?? []).flatMap((event) =>
-    expandEventOccurrences(event, range.from, range.to),
-  )
+  const allEvents = eventsResult.data ?? []
+  const baseEvents = allEvents.filter((e) => e.parent_event_id === null)
+  const overrides = allEvents.filter((e) => e.parent_event_id !== null)
+
+  const overridesByParent = new Map()
+  for (const override of overrides) {
+    const key = normalizeOccurrenceKey(override.parent_event_id, override.original_occurrence_start_at)
+    overridesByParent.set(key, override)
+  }
+
+  const eventItems = []
+  for (const event of baseEvents) {
+    const occurrences = expandEventOccurrences(event, range.from, range.to, overridesByParent)
+    eventItems.push(...occurrences)
+  }
+
+  for (const override of overrides) {
+    const overrideStart = new Date(override.starts_at)
+    if (eventOverlapsRange(overrideStart, override.ends_at ? new Date(override.ends_at) : overrideStart, range.from, range.to)) {
+      eventItems.push(overrideEventItem(override))
+    }
+  }
+
   const taskItems = (tasksResult.data ?? []).map(taskItem)
   const items = [...eventItems, ...taskItems].sort((left, right) =>
     itemSortValue(left).localeCompare(itemSortValue(right)),

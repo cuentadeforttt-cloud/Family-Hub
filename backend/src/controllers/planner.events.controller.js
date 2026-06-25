@@ -73,9 +73,21 @@ const cancelEvent = async (req, res) => {
   }
 }
 
+const createOccurrenceOverride = async (req, res) => {
+  try {
+    const context = await getPlannerContext(req)
+    const payload = await eventsService.createOccurrenceOverride(context, req.params.id, req.body ?? {})
+
+    return res.status(201).json(payload)
+  } catch (error) {
+    return sendPlannerError(res, error)
+  }
+}
+
 module.exports = {
   cancelEvent,
   createEvent,
+  createOccurrenceOverride,
   listEvents,
   updateEvent,
 }
