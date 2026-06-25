@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ActionPill, AppButton, AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
 import { ApiError } from '../../services/api';
 import { getPlannerSummary, type PlannerSummary } from '../../services/plannerSummary';
@@ -19,6 +19,8 @@ type PlannerSheet =
 
 export function PlannerScreen() {
   const route = useRoute<any>();
+  const navigation = useNavigation<any>();
+  const processedNavKeyRef = useRef<string | null>(null);
   const { session } = useAuth();
   const accessToken = session?.access_token;
   const [activeTab, setActiveTab] = useState<PlannerInternalTab>(route.params?.initialTab ?? 'tasks');
@@ -47,25 +49,40 @@ export function PlannerScreen() {
   }, [accessToken]);
 
   useEffect(() => {
-    if (route.params?.initialTab === 'calendar') {
-      setActiveTab('calendar');
-    } else if (route.params?.initialTab === 'goals') {
-      setActiveTab('goals');
-    } else if (route.params?.initialTab === 'tasks') {
-      setActiveTab('tasks');
-    }
-
-    if (route.params?.initialSheet === 'task') {
-      setSheet({ type: 'task', mode: 'create' });
-    }
-
-    if (route.params?.initialSheet === 'event') {
-      setSheet({ type: 'event', mode: 'create' });
-    }
-
-    setRefreshKey((value) => value + 1);
     void loadSummary();
-  }, [loadSummary, route.params?.refreshKey, route.params?.initialTab, route.params?.initialSheet, route.params?.sheetKey]);
+  }, [loadSummary]);
+
+  useEffect(() => {
+    const p = route.params;
+    if (!p?.initialTab && !p?.initialSheet && !p?.sheetKey && !p?.refreshKey) {
+      return;
+    }
+
+    const key = p?.sheetKey ?? p?.refreshKey ?? `${p?.initialTab ?? ''}-${p?.initialSheet ?? ''}`;
+    if (processedNavKeyRef.current === key) {
+      return;
+    }
+    processedNavKeyRef.current = key;
+
+    if (p.initialTab === 'tasks') setActiveTab('tasks');
+    else if (p.initialTab === 'calendar') setActiveTab('calendar');
+    else if (p.initialTab === 'goals') setActiveTab('goals');
+
+    if (p.initialSheet === 'task') setSheet({ type: 'task', mode: 'create' });
+    else if (p.initialSheet === 'event') setSheet({ type: 'event', mode: 'create' });
+
+    if (p.refreshKey) {
+      setRefreshKey((value) => value + 1);
+      void loadSummary();
+    }
+
+    navigation.setParams({
+      initialTab: undefined,
+      initialSheet: undefined,
+      sheetKey: undefined,
+      refreshKey: undefined,
+    });
+  }, [route.params?.initialTab, route.params?.initialSheet, route.params?.sheetKey, route.params?.refreshKey, loadSummary, navigation]);
 
   useFocusEffect(
     useCallback(() => {
