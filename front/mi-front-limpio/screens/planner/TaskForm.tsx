@@ -24,6 +24,7 @@ import {
 import { OTHER_PLANNER_TEMPLATE, PLANNER_TASK_TEMPLATES } from '../../services/plannerTemplates';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
+import { useAppRefresh } from '../../context/AppRefreshContext';
 import { addDays, dateToYMD, plannerStyles as S, priorityLabels } from './plannerShared';
 
 type TaskFormProps = {
@@ -61,6 +62,7 @@ export function TaskForm({
   const route = useRoute<any>();
   const { session, authMe, loading: authLoading } = useAuth();
   const { members } = useHousehold();
+  const { markPlannerChanged } = useAppRefresh();
   const accessToken = session?.access_token;
   const taskId = taskIdProp ?? route.params?.taskId as string | undefined;
 
@@ -87,6 +89,20 @@ export function TaskForm({
       (membership) => membership.household_id === householdId && membership.status === 'active',
     )?.id ?? '';
   }, [authMe?.active_household?.id, authMe?.memberships]);
+
+  const isFormReadyForSubmit = useMemo(() => {
+    if (authLoading || loading || saving) return false;
+    if (!accessToken) return false;
+    if (!title.trim()) return false;
+
+    if (mode === 'create') {
+      return true;
+    }
+    if (mode === 'edit' && taskId) {
+      return true;
+    }
+    return false;
+  }, [authLoading, loading, saving, accessToken, title, mode, taskId]);
 
   useEffect(() => {
     const loadTask = async () => {
@@ -169,8 +185,24 @@ export function TaskForm({
   };
 
   const submit = async () => {
+    if (authLoading) {
+      const message = 'Estamos preparando tu sesión. Intentá de nuevo en un momento.';
+      setError(message);
+      Alert.alert('Planner', message);
+      return;
+    }
+
+    if (loading) {
+      const message = 'Estamos preparando el formulario. Intentá de nuevo en un momento.';
+      setError(message);
+      Alert.alert('Planner', message);
+      return;
+    }
+
     if (!accessToken) {
-      Alert.alert('Planner', 'Necesitas iniciar sesion nuevamente.');
+      const message = 'No hay sesión activa para guardar la tarea.';
+      setError(message);
+      Alert.alert('Planner', message);
       return;
     }
 
@@ -194,12 +226,25 @@ export function TaskForm({
       payload.template_key = templateKey;
     }
 
+    if (__DEV__) {
+      console.log('[TaskForm submit]', {
+        mode,
+        hasAccessToken: Boolean(accessToken),
+        authLoading,
+        loading,
+        saving,
+        title,
+        requiresVerification,
+        payloadRequiresVerification: payload.requires_verification,
+      });
+    }
+
     setSaving(true);
-    setError(null);
 
     try {
       if (mode === 'edit' && taskId) {
         await updatePlannerTask(accessToken, taskId, payload);
+        markPlannerChanged();
         if (onSaved) {
           onSaved('Tarea actualizada.');
         } else {
@@ -207,6 +252,7 @@ export function TaskForm({
         }
       } else {
         await createPlannerTask(accessToken, payload);
+        markPlannerChanged();
         if (onSaved) {
           onSaved('Tarea creada.');
         } else {
@@ -221,6 +267,15 @@ export function TaskForm({
       const message = err instanceof ApiError ? err.message : 'No pudimos guardar la tarea.';
       setError(message);
       Alert.alert('Planner', message);
+
+      if (__DEV__ && err instanceof ApiError) {
+        console.error('[TaskForm submit error]', {
+          message: err.message,
+          status: err.status,
+          code: err.code,
+          debugMessage: err.debugMessage,
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -354,7 +409,11 @@ export function TaskForm({
         <View style={[S.card, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
           <View style={{ flex: 1, marginRight: 12 }}>
             <Text style={{ color: '#17201A', fontWeight: '800', fontSize: 15 }}>Requiere verificacion</Text>
-            <Text style={S.muted}>Al completar, queda pendiente hasta que otro miembro la verifique.</Text>
+            <Text style={S.muted}>
+              {requiresVerification
+                ? 'Al completar, queda pendiente hasta que otro miembro la verifique.'
+                : 'Si esta apagado, la tarea se completa directamente.'}
+            </Text>
           </View>
           <Switch value={requiresVerification} onValueChange={setRequiresVerification} />
         </View>
@@ -405,7 +464,7 @@ export function TaskForm({
         <TouchableOpacity
           style={[S.primaryBtn, { marginTop: 16 }, saving && { opacity: 0.6 }]}
           onPress={() => void submit()}
-          disabled={saving}
+          disabled={saving || loading || authLoading || !isFormReadyForSubmit}
         >
           <Text style={S.btnText}>{saving ? 'Guardando...' : mode === 'edit' ? 'Guardar cambios' : 'Crear tarea'}</Text>
         </TouchableOpacity>

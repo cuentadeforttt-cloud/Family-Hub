@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { ApiError } from '../../services/api';
@@ -7,8 +7,10 @@ import { getPlannerSummary, type PlannerSummary } from '../../services/plannerSu
 import { listPlannerTasks, type PlannerTask } from '../../services/plannerTasks';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
+import { useAppRefresh } from '../../context/AppRefreshContext';
 import { ActionPill, AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
 import { colors, radius, spacing } from '../../constants/theme';
+import { APP_ICONS, HomePlusIcon } from '../../constants/icons';
 
 type Props = {
   variant?: 'light' | 'dark';
@@ -71,6 +73,7 @@ const sortHomeTasks = (tasks: PlannerTask[], myMembershipId: string) => {
 export function useHomePlannerData() {
   const { session, authMe } = useAuth();
   const { members } = useHousehold();
+  const { plannerChangedAt } = useAppRefresh();
   const accessToken = session?.access_token;
   const [summary, setSummary] = useState<PlannerSummary | null>(null);
   const [tasks, setTasks] = useState<PlannerTask[]>([]);
@@ -125,6 +128,12 @@ export function useHomePlannerData() {
     }, [refresh]),
   );
 
+  useEffect(() => {
+    if (!loading && plannerChangedAt > 0) {
+      void refresh();
+    }
+  }, [plannerChangedAt]);
+
   return {
     error,
     events,
@@ -170,6 +179,9 @@ export function HomePlannerSections({ variant = 'light' }: Props) {
 
       {summary && (summary.overdue_tasks_count > 0 || summary.awaiting_verification_count > 0) ? (
         <AppCard variant="warning" padding="default" highlighted style={styles.card}>
+          <View style={styles.cardHeaderIcon}>
+            <HomePlusIcon name="alert-circle" color={colors.warning.base} size={18} />
+          </View>
           <AppText variant="title3" tone="warning">
             Atencion requerida
           </AppText>
@@ -188,6 +200,9 @@ export function HomePlannerSections({ variant = 'light' }: Props) {
 
       <AppCard variant={cardVariant} padding="default" style={styles.card}>
         <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderIcon}>
+            <HomePlusIcon name={APP_ICONS.home.tasks} color={dark ? colors.text.inverse : colors.terracotta[500]} size={18} />
+          </View>
           <AppText variant="title3" tone={dark ? 'inverse' : 'primary'}>
             Tareas del hogar
           </AppText>
@@ -237,6 +252,9 @@ export function HomePlannerSections({ variant = 'light' }: Props) {
 
       <AppCard variant={cardVariant} padding="default" style={styles.card}>
         <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderIcon}>
+            <HomePlusIcon name={APP_ICONS.home.schedule} color={dark ? colors.text.inverse : colors.terracotta[500]} size={18} />
+          </View>
           <AppText variant="title3" tone={dark ? 'inverse' : 'primary'}>
             Proximos eventos
           </AppText>
@@ -286,8 +304,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: spacing[3],
+    gap: spacing[2],
     marginBottom: spacing[2],
+  },
+  cardHeaderIcon: {
+    minWidth: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   itemRow: {
     flexDirection: 'row',

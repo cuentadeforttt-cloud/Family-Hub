@@ -10,6 +10,7 @@ import {
 } from '../../services/plannerTasks';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
+import { useAppRefresh } from '../../context/AppRefreshContext';
 import { dateToYMD, formatDate, formatTime, plannerStyles as S, priorityLabels, statusLabels } from './plannerShared';
 
 type Props = {
@@ -35,6 +36,7 @@ const filters: Array<{ key: FilterKey; label: string }> = [
 export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEditTask }: Props) {
   const { session, authMe, loading: authLoading } = useAuth();
   const { members } = useHousehold();
+  const { plannerChangedAt, markPlannerChanged } = useAppRefresh();
   const accessToken = session?.access_token;
 
   const [tasks, setTasks] = useState<PlannerTask[]>([]);
@@ -66,6 +68,12 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
     }
     void loadTasks();
   }, [loadTasks, refreshKey, authLoading, accessToken]);
+
+  useEffect(() => {
+    if (!loading && plannerChangedAt > 0) {
+      void loadTasks();
+    }
+  }, [plannerChangedAt]);
 
   const memberNameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -119,6 +127,7 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
     try {
       if (action === 'complete') await completePlannerTask(accessToken, task.id);
       if (action === 'verify') await verifyPlannerTask(accessToken, task.id);
+      markPlannerChanged();
       await loadTasks();
       onChanged?.();
     } catch (err) {
@@ -140,6 +149,7 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
           setSavingId(task.id);
           try {
             await cancelPlannerTask(accessToken, task.id);
+            markPlannerChanged();
             await loadTasks();
             onChanged?.();
           } catch (err) {

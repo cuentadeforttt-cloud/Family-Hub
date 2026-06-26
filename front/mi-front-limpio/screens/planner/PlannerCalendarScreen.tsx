@@ -5,6 +5,8 @@ import { getPlannerCalendar, type PlannerCalendarEventItem, type PlannerCalendar
 import { cancelPlannerEvent } from '../../services/plannerEvents';
 import { completePlannerTask } from '../../services/plannerTasks';
 import { useAuth } from '../../context/AuthContext';
+import { useHousehold } from '../../context/HouseholdContext';
+import { useAppRefresh } from '../../context/AppRefreshContext';
 import {
   addDays,
   addMonths,
@@ -51,6 +53,8 @@ const moveDate = (date: Date, view: PlannerCalendarView, direction: -1 | 1) => {
 
 export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, onEditEvent, onEditTask }: Props) {
   const { session, loading: authLoading } = useAuth();
+  const { members } = useHousehold();
+  const { plannerChangedAt, markPlannerChanged } = useAppRefresh();
   const accessToken = session?.access_token;
 
   const [view, setView] = useState<PlannerCalendarView>('month');
@@ -86,6 +90,12 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
     }
     void loadCalendar();
   }, [loadCalendar, refreshKey, authLoading, accessToken]);
+
+  useEffect(() => {
+    if (!loading && plannerChangedAt > 0) {
+      void loadCalendar();
+    }
+  }, [plannerChangedAt]);
 
   const groupedItems = useMemo(() => {
     const groups = new Map<string, PlannerCalendarItem[]>();
@@ -132,6 +142,7 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
     setSavingId(taskId);
     try {
       await completePlannerTask(accessToken, taskId);
+      markPlannerChanged();
       await loadCalendar();
       onChanged?.();
     } catch (err) {
@@ -168,6 +179,7 @@ const handleEditEvent = (item: PlannerCalendarEventItem) => {
           setSavingId(eventId);
           try {
             await cancelPlannerEvent(accessToken, eventId);
+            markPlannerChanged();
             await loadCalendar();
             onChanged?.();
           } catch (err) {

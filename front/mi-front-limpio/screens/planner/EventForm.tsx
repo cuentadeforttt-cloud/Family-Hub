@@ -22,6 +22,7 @@ import {
   type PlannerEventRecurrence,
 } from '../../services/plannerEvents';
 import { useAuth } from '../../context/AuthContext';
+import { useAppRefresh } from '../../context/AppRefreshContext';
 import { buildLocalIso, dateToYMD, plannerStyles as S, recurrenceLabels } from './plannerShared';
 
 type EventFormProps = {
@@ -63,6 +64,7 @@ export function EventForm({
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const { session, loading: authLoading } = useAuth();
+  const { markPlannerChanged } = useAppRefresh();
   const accessToken = session?.access_token;
   const eventId = eventIdProp ?? route.params?.eventId as string | undefined;
 
@@ -253,6 +255,7 @@ export function EventForm({
         }
 
         await updatePlannerEvent(accessToken, targetEventId, payload);
+        markPlannerChanged();
         if (onSaved) {
           onSaved('Evento actualizado.');
         } else {
@@ -260,6 +263,7 @@ export function EventForm({
         }
       } else {
         await createPlannerEvent(accessToken, payload);
+        markPlannerChanged();
         if (onSaved) {
           onSaved('Evento creado.');
         } else {
@@ -300,6 +304,7 @@ export function EventForm({
           setSaving(true);
           try {
             await cancelPlannerEvent(accessToken, eventId);
+            markPlannerChanged();
             if (onSaved) {
               onSaved('Evento cancelado.');
             } else {

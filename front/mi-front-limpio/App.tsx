@@ -3,6 +3,7 @@ import { NavigationContainer, type LinkingOptions } from '@react-navigation/nati
 import * as Linking from 'expo-linking';
 import { AuthProvider } from './context/AuthContext';
 import { HouseholdProvider } from './context/HouseholdContext';
+import { AppRefreshProvider } from './context/AppRefreshContext';
 import { AppNavigator } from './navigation/AppNavigator';
 import type { RootStackParamList } from './navigation/types';
 
@@ -27,9 +28,11 @@ export default function App() {
   return (
     <AuthProvider>
       <HouseholdProvider>
-        <NavigationContainer linking={linking}>
-          <AppNavigator />
-        </NavigationContainer>
+        <AppRefreshProvider>
+          <NavigationContainer linking={linking}>
+            <AppNavigator />
+          </NavigationContainer>
+        </AppRefreshProvider>
       </HouseholdProvider>
     </AuthProvider>
   );
