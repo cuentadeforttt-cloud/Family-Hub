@@ -125,8 +125,18 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
     }
 
     try {
-      if (action === 'complete') await completePlannerTask(accessToken, task.id);
-      if (action === 'verify') await verifyPlannerTask(accessToken, task.id);
+      let resultTask: PlannerTask | undefined;
+      if (action === 'complete') {
+        const response = await completePlannerTask(accessToken, task.id);
+        resultTask = response.task;
+      }
+      if (action === 'verify') {
+        const response = await verifyPlannerTask(accessToken, task.id);
+        resultTask = response.task;
+      }
+      if (resultTask) {
+        setTasks((current) => current.map((item) => (item.id === task.id ? resultTask! : item)));
+      }
       markPlannerChanged();
       await loadTasks();
       onChanged?.();
@@ -216,9 +226,42 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
       ) : null}
 
       {visibleTasks.map((task) => {
-        const assignedName = task.assigned_to_member_id
-          ? memberNameById.get(task.assigned_to_member_id) ?? task.assigned_member?.display_name ?? 'Miembro'
-          : 'Sin asignar';
+        const getDisplayName = (member: typeof task.assigned_member | typeof task.completed_member | typeof task.verified_member) => {
+          if (!member) return 'Miembro';
+          return member.display_name || 'Miembro';
+        };
+
+        const getPersonLabel = () => {
+          if (task.status === 'pending' || task.status === 'cancelled') {
+            const name = task.assigned_to_member_id
+              ? memberNameById.get(task.assigned_to_member_id) ?? getDisplayName(task.assigned_member)
+              : null;
+            return name || task.assigned_member?.display_name || 'Sin asignar';
+          }
+
+          if (task.status === 'completed' || task.status === 'awaiting_verification' || task.status === 'verified') {
+            const name = getDisplayName(task.completed_member);
+            return name;
+          }
+
+          return 'Sin asignar';
+        };
+
+        const getSecondaryLabel = () => {
+          if (task.status === 'awaiting_verification') {
+            return 'Pendiente de verificación';
+          }
+          if (task.status === 'verified' && task.verified_member) {
+            return `Verificada por ${getDisplayName(task.verified_member)}`;
+          }
+          if (task.status === 'cancelled') {
+            return null;
+          }
+          return null;
+        };
+
+        const personLabel = getPersonLabel();
+        const secondaryLabel = getSecondaryLabel();
         const isSaving = savingId === task.id;
         const today = dateToYMD(new Date());
         const isOverdue = task.status === 'pending' && Boolean(task.due_date) && task.due_date! < today;
@@ -247,11 +290,15 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
             </View>
             {task.description ? <Text style={[S.muted, { marginTop: 8 }]}>{task.description}</Text> : null}
             <Text style={[S.muted, { marginTop: 8 }]}>
-              {priorityLabels[task.priority]} · {task.category || task.template_key || 'Sin categoria'} · {assignedName}
+              {priorityLabels[task.priority]} · {task.category || task.template_key || 'Sin categoria'} · {personLabel}
             </Text>
-            <Text style={[S.muted, { marginTop: 4 }]}>
-              {task.requires_verification ? 'Requiere verificacion' : 'No requiere verificacion'}
-            </Text>
+            {secondaryLabel ? (
+              <Text style={[S.muted, { marginTop: 4 }]}>{secondaryLabel}</Text>
+            ) : (
+              <Text style={[S.muted, { marginTop: 4 }]}>
+                {task.requires_verification ? 'Requiere verificacion' : 'No requiere verificacion'}
+              </Text>
+            )}
 
             <View style={[S.row, { marginTop: 12 }]}>
               {task.status === 'pending' ? (

@@ -17,6 +17,14 @@ export type PlannerTaskTemplateKey =
   | 'studies'
   | 'payments';
 
+export type PlannerTaskMember = {
+  id: string;
+  person_id: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  role?: string | null;
+};
+
 export type PlannerTask = {
   id: string;
   household_id: string;
@@ -37,13 +45,9 @@ export type PlannerTask = {
   verified_at?: string | null;
   created_at: string;
   updated_at: string;
-  assigned_member?: {
-    id: string;
-    person_id: string;
-    display_name?: string | null;
-    avatar_url?: string | null;
-    role?: string | null;
-  } | null;
+  assigned_member?: PlannerTaskMember | null;
+  completed_member?: PlannerTaskMember | null;
+  verified_member?: PlannerTaskMember | null;
 };
 
 export type CreatePlannerTaskPayload = {

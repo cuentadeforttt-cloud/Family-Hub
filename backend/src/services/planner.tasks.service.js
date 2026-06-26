@@ -122,41 +122,74 @@ const validateAssignment = async (client, householdId, assignedToMemberId) => {
   return assignedToMemberId
 }
 
-const hydrateAssignedMembers = async (client, tasks) => {
-  const memberIds = [...new Set(tasks.map((task) => task.assigned_to_member_id).filter(Boolean))]
+const hydrateMembers = async (client, tasks) => {
+  const assignedMemberIds = [...new Set(tasks.map((task) => task.assigned_to_member_id).filter(Boolean))]
+  const completedPersonIds = [...new Set(tasks.map((task) => task.completed_by_person_id).filter(Boolean))]
+  const verifiedPersonIds = [...new Set(tasks.map((task) => task.verified_by_person_id).filter(Boolean))]
 
-  if (memberIds.length === 0) {
+  if (assignedMemberIds.length === 0 && completedPersonIds.length === 0 && verifiedPersonIds.length === 0) {
     return tasks
   }
 
   const { data, error } = await client
     .from('household_members')
     .select('id, person_id, role, people(id, display_name, avatar_url)')
-    .in('id', memberIds)
+    .or(
+      assignedMemberIds.length > 0
+        ? `id.in.(${assignedMemberIds.join(',')})` +
+            (completedPersonIds.length > 0 ? `,person_id.in.(${completedPersonIds.join(',')})` : '') +
+            (verifiedPersonIds.length > 0 ? `,person_id.in.(${verifiedPersonIds.join(',')})` : '')
+        : completedPersonIds.length > 0
+          ? `person_id.in.(${completedPersonIds.join(',')})` +
+              (verifiedPersonIds.length > 0 ? `,person_id.in.(${verifiedPersonIds.join(',')})` : '')
+          : verifiedPersonIds.length > 0
+            ? `person_id.in.(${verifiedPersonIds.join(',')})`
+            : '',
+    )
 
   if (error) {
     return tasks
   }
 
-  const membersById = new Map(
-    (data ?? []).map((member) => [
-      member.id,
-      {
-        id: member.id,
+  const membersByMembershipId = new Map()
+  const peopleByPersonId = new Map()
+
+  ;(data ?? []).forEach((member) => {
+    membersByMembershipId.set(member.id, {
+      id: member.id,
+      person_id: member.person_id,
+      display_name: member.people?.display_name ?? null,
+      avatar_url: member.people?.avatar_url ?? null,
+      role: member.role,
+    })
+    if (!peopleByPersonId.has(member.person_id)) {
+      peopleByPersonId.set(member.person_id, {
+        id: member.person_id,
         person_id: member.person_id,
         display_name: member.people?.display_name ?? null,
         avatar_url: member.people?.avatar_url ?? null,
         role: member.role,
-      },
-    ]),
-  )
+      })
+    }
+  })
 
-  return tasks.map((task) => ({
-    ...task,
-    ...(membersById.has(task.assigned_to_member_id)
-      ? { assigned_member: membersById.get(task.assigned_to_member_id) }
-      : {}),
-  }))
+  return tasks.map((task) => {
+    const hydrated = { ...task }
+
+    if (task.assigned_to_member_id && membersByMembershipId.has(task.assigned_to_member_id)) {
+      hydrated.assigned_member = membersByMembershipId.get(task.assigned_to_member_id)
+    }
+
+    if (task.completed_by_person_id && peopleByPersonId.has(task.completed_by_person_id)) {
+      hydrated.completed_member = peopleByPersonId.get(task.completed_by_person_id)
+    }
+
+    if (task.verified_by_person_id && peopleByPersonId.has(task.verified_by_person_id)) {
+      hydrated.verified_member = peopleByPersonId.get(task.verified_by_person_id)
+    }
+
+    return hydrated
+  })
 }
 
 const getTaskOrThrow = async (client, householdId, taskId) => {
@@ -222,7 +255,7 @@ const listTasks = async (context, query) => {
   }
 
   const sorted = sortTasks(data ?? []).slice(0, limit)
-  const hydrated = await hydrateAssignedMembers(context.client, sorted)
+  const hydrated = await hydrateMembers(context.client, sorted)
 
   return { tasks: hydrated }
 }
@@ -393,7 +426,12 @@ const completeTask = async (context, taskId) => {
     throwSupabaseError(error)
   }
 
-  return { task: data }
+  if (!data) {
+    throw createHttpError(404, 'Task no encontrada.', 'task_not_found')
+  }
+
+  const hydrated = await hydrateMembers(context.client, [data])
+  return { task: hydrated[0] }
 }
 
 const verifyTask = async (context, taskId) => {
@@ -423,7 +461,12 @@ const verifyTask = async (context, taskId) => {
     throwSupabaseError(error)
   }
 
-  return { task: data }
+  if (!data) {
+    throw createHttpError(404, 'Task no encontrada.', 'task_not_found')
+  }
+
+  const hydrated = await hydrateMembers(context.client, [data])
+  return { task: hydrated[0] }
 }
 
 module.exports = {
