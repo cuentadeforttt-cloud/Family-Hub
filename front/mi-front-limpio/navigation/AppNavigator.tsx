@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
-import type { AuthStackParamList, PrivateStackParamList } from './types';
+import type { AuthStackParamList, PrivateStackParamList, InventoryStackParamList } from './types';
 import { P00Splash } from '../screens/Splash';
 import { AuthLoadingScreen } from '../screens/AuthLoading';
 import { P01Registro } from '../screens/Registro';
@@ -13,6 +13,7 @@ import { LoginScreen } from '../screens/Login';
 import { ForgotPasswordScreen } from '../screens/ForgotPassword';
 import { UpdatePasswordScreen } from '../screens/UpdatePassword';
 import { HomeTabNavigator } from './HomeTabNavigator';
+import { InventoryStackNavigator } from './InventoryStackNavigator';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const PrivateStack = createNativeStackNavigator<PrivateStackParamList>();
@@ -197,6 +198,7 @@ const PrivateNavigator = () => {
       <PrivateStack.Screen name="PendingApprovalFallback" component={WaitingApprovalScreen} />
       <PrivateStack.Screen name="HouseholdSelectionFallback" component={HouseholdSelectionFallbackScreen} />
       <PrivateStack.Screen name="AccessSuspendedFallback" component={AccessSuspendedFallbackScreen} />
+      <PrivateStack.Screen name="InventoryStack" component={InventoryStackNavigator} />
     </PrivateStack.Navigator>
   );
 };

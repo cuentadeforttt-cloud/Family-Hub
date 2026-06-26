@@ -14,12 +14,22 @@ export type PrivateStackParamList = {
   PendingApprovalFallback: undefined;
   HouseholdSelectionFallback: undefined;
   AccessSuspendedFallback: undefined;
+  InventoryStack: undefined;
+  ProductDetail: { productId: string };
+};
+
+export type InventoryStackParamList = {
+  Inventory: undefined;
+  ProductDetail: { productId: string };
+  AddProduct: undefined;
+  ShoppingList: undefined;
 };
 
 export type HomeTabParamList = {
   HomeTab: undefined;
   PeopleTab: undefined;
   AddTab: undefined;
+  InventoryTab: undefined;
   PlannerTab: undefined;
   MoreTab: undefined;
 };

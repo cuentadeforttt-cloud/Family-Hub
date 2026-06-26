@@ -20,6 +20,8 @@ export type AppInputProps = Omit<TextInputProps, 'style'> & {
   variant?: AppInputVariant;
   containerStyle?: StyleProp<ViewStyle>;
   inputStyle?: StyleProp<TextStyle>;
+  leftSlot?: React.ReactNode;
+  rightSlot?: React.ReactNode;
 };
 
 const variantHeights: Record<AppInputVariant, number> = {
@@ -41,6 +43,8 @@ export function AppInput({
   inputStyle,
   onFocus,
   onBlur,
+  leftSlot,
+  rightSlot,
   ...props
 }: AppInputProps) {
   const [focused, setFocused] = useState(false);
@@ -53,40 +57,45 @@ export function AppInput({
       <AppText variant="caption" tone="secondary" weight="700">
         {label}
       </AppText>
-      <TextInput
-        accessibilityLabel={accessibilityLabel ?? label}
-        editable={editable}
-        multiline={isMultiline}
-        placeholderTextColor={colors.text.muted}
-        onFocus={(event) => {
-          setFocused(true);
-          onFocus?.(event);
-        }}
-        onBlur={(event) => {
-          setFocused(false);
-          onBlur?.(event);
-        }}
-        style={[
-          typography.body,
-          {
-            minHeight: variantHeights[variant],
-            paddingHorizontal: spacing[4],
-            paddingVertical: isMultiline ? spacing[3] : spacing[2],
-            borderRadius: radius.lg,
-            borderWidth: focused ? 2 : 1,
-            borderColor: hasError
-              ? colors.danger.base
-              : focused
-                ? colors.terracotta[500]
-                : colors.border.default,
-            backgroundColor: isDisabled ? colors.surface.muted : colors.surface.soft,
-            color: isDisabled ? colors.text.disabled : colors.text.primary,
-            textAlignVertical: isMultiline ? 'top' : 'center',
-          },
-          inputStyle,
-        ]}
-        {...props}
-      />
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        {leftSlot && <View style={{ marginRight: spacing[2] }}>{leftSlot}</View>}
+        <TextInput
+          accessibilityLabel={accessibilityLabel ?? label}
+          editable={editable}
+          multiline={isMultiline}
+          placeholderTextColor={colors.text.muted}
+          onFocus={(event) => {
+            setFocused(true);
+            onFocus?.(event);
+          }}
+          onBlur={(event) => {
+            setFocused(false);
+            onBlur?.(event);
+          }}
+          style={[
+            typography.body,
+            {
+              flex: 1,
+              minHeight: variantHeights[variant],
+              paddingHorizontal: spacing[4],
+              paddingVertical: isMultiline ? spacing[3] : spacing[2],
+              borderRadius: radius.lg,
+              borderWidth: focused ? 2 : 1,
+              borderColor: hasError
+                ? colors.danger.base
+                : focused
+                  ? colors.terracotta[500]
+                  : colors.border.default,
+              backgroundColor: isDisabled ? colors.surface.muted : colors.surface.soft,
+              color: isDisabled ? colors.text.disabled : colors.text.primary,
+              textAlignVertical: isMultiline ? 'top' : 'center',
+            },
+            inputStyle,
+          ]}
+          {...props}
+        />
+        {rightSlot && <View style={{ marginLeft: spacing[2] }}>{rightSlot}</View>}
+      </View>
       {hasError ? (
         <AppText variant="caption" tone="danger">
           {errorText}

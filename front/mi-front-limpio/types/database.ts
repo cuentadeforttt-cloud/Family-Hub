@@ -372,6 +372,280 @@ export type Database = {
           },
         ];
       };
+
+      products: {
+        Row: {
+          id: string;
+          household_id: string;
+          name: string;
+          category: string | null;
+          description: string | null;
+          current_stock: number;
+          unit: string | null;
+          expiry_date: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          name: string;
+          category?: string | null;
+          description?: string | null;
+          current_stock?: number;
+          unit?: string | null;
+          expiry_date?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          name?: string;
+          category?: string | null;
+          description?: string | null;
+          current_stock?: number;
+          unit?: string | null;
+          expiry_date?: string | null;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'products_household_id_fkey';
+            columns: ['household_id'];
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'products_created_by_fkey';
+            columns: ['created_by'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+
+      inventory_items: {
+        Row: {
+          id: string;
+          household_id: string;
+          product_id: string;
+          quantity: number;
+          expiry_date: string | null;
+          purchase_date: string | null;
+          notes: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          product_id: string;
+          quantity: number;
+          expiry_date?: string | null;
+          purchase_date?: string | null;
+          notes?: string | null;
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          product_id?: string;
+          quantity?: number;
+          expiry_date?: string | null;
+          purchase_date?: string | null;
+          notes?: string | null;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'inventory_items_household_id_fkey';
+            columns: ['household_id'];
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'inventory_items_product_id_fkey';
+            columns: ['product_id'];
+            referencedRelation: 'products';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'inventory_items_created_by_fkey';
+            columns: ['created_by'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+
+      inventory_templates: {
+        Row: {
+          id: string;
+          household_id: string;
+          product_id: string;
+          ideal_quantity: number;
+          priority: 'high' | 'medium' | 'low';
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          product_id: string;
+          ideal_quantity: number;
+          priority?: 'high' | 'medium' | 'low';
+          created_by: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          product_id?: string;
+          ideal_quantity?: number;
+          priority?: 'high' | 'medium' | 'low';
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'inventory_templates_household_id_fkey';
+            columns: ['household_id'];
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'inventory_templates_product_id_fkey';
+            columns: ['product_id'];
+            referencedRelation: 'products';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'inventory_templates_created_by_fkey';
+            columns: ['created_by'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+
+      stock_movements: {
+        Row: {
+          id: string;
+          household_id: string;
+          product_id: string;
+          inventory_item_id: string | null;
+          type: 'add' | 'remove' | 'expired' | 'adjustment';
+          quantity: number;
+          reason: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          product_id: string;
+          inventory_item_id?: string | null;
+          type: 'add' | 'remove' | 'expired' | 'adjustment';
+          quantity: number;
+          reason?: string | null;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          product_id?: string;
+          inventory_item_id?: string | null;
+          type?: 'add' | 'remove' | 'expired' | 'adjustment';
+          quantity?: number;
+          reason?: string | null;
+          created_by?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'stock_movements_household_id_fkey';
+            columns: ['household_id'];
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'stock_movements_product_id_fkey';
+            columns: ['product_id'];
+            referencedRelation: 'products';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'stock_movements_inventory_item_id_fkey';
+            columns: ['inventory_item_id'];
+            referencedRelation: 'inventory_items';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'stock_movements_created_by_fkey';
+            columns: ['created_by'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+
+      inventory_settings: {
+        Row: {
+          id: string;
+          household_id: string;
+          user_id: string | null;
+          key: string;
+          value: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          household_id: string;
+          user_id?: string | null;
+          key: string;
+          value: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          household_id?: string;
+          user_id?: string | null;
+          key?: string;
+          value?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'inventory_settings_household_id_fkey';
+            columns: ['household_id'];
+            referencedRelation: 'households';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'inventory_settings_user_id_fkey';
+            columns: ['user_id'];
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
 
     Views: Record<string, never>;

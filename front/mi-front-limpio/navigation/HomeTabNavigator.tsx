@@ -16,6 +16,7 @@ import { CreateTaskScreen } from '../screens/planner/CreateTaskScreen';
 import { EditTaskScreen } from '../screens/planner/EditTaskScreen';
 import { CreateEventScreen } from '../screens/planner/CreateEventScreen';
 import { EditEventScreen } from '../screens/planner/EditEventScreen';
+import { InventoryTabScreen } from '../screens/inventory/InventoryTabScreen';
 
 const Tab = createBottomTabNavigator<HomeTabParamList>();
 const PlannerStack = createNativeStackNavigator<PlannerStackParamList>();
@@ -285,6 +286,21 @@ export function HomeTabNavigator() {
       />
 
       {/* 4 – Inventario */}
+      <Tab.Screen
+        name="InventoryTab"
+        component={InventoryTabScreen}
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              label="Inventario"
+              focused={focused}
+              mark="Inv"
+            />
+          ),
+        }}
+      />
+
+      {/* 5 – Planner */}
       <Tab.Screen
         name="PlannerTab"
         component={PlannerStackScreen}
