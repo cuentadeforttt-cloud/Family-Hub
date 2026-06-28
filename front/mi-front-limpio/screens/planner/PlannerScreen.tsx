@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Keyboard, Modal, Pressable, RefreshControl, ScrollView, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { ActionPill, AppButton, AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
+import { APP_ICONS, HomePlusIcon } from '../../constants/icons';
+import { colors, radius } from '../../constants/theme';
 import { ApiError } from '../../services/api';
 import { getPlannerSummary, type PlannerSummary } from '../../services/plannerSummary';
 import { useAuth } from '../../context/AuthContext';
@@ -126,11 +128,40 @@ export function PlannerScreen() {
         contentContainerStyle={S.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void refresh()} />}
       >
-        <View style={[S.headerRow, { marginBottom: 16 }]}>
+        <View style={[S.headerRow, { marginBottom: 8 }]}>
           <View style={{ flex: 1 }}>
             <AppText variant="title1">Planner</AppText>
+          </View>
+        </View>
+
+        <View style={S.topbarTabsContainer}>
+          <TouchableOpacity
+            style={[S.topbarTab, activeTab === 'tasks' && S.topbarTabActive]}
+            onPress={() => setActiveTab('tasks')}
+          >
+            <HomePlusIcon name={APP_ICONS.planner.todo} size={16} color={activeTab === 'tasks' ? '#FFFFFF' : '#8A8178'} />
+            <AppText variant="micro" tone={activeTab === 'tasks' ? 'primary' : 'tertiary'} weight={activeTab === 'tasks' ? '700' : '500'} style={activeTab === 'tasks' ? S.topbarTabTextActive : S.topbarTabText}>Tareas</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[S.topbarTab, activeTab === 'calendar' && S.topbarTabActive]}
+            onPress={() => setActiveTab('calendar')}
+          >
+            <HomePlusIcon name={APP_ICONS.planner.calendar} size={16} color={activeTab === 'calendar' ? '#FFFFFF' : '#8A8178'} />
+            <AppText variant="micro" tone={activeTab === 'calendar' ? 'primary' : 'tertiary'} weight={activeTab === 'calendar' ? '700' : '500'} style={activeTab === 'calendar' ? S.topbarTabTextActive : S.topbarTabText}>Calendario</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[S.topbarTab, activeTab === 'goals' && S.topbarTabActive]}
+            onPress={() => setActiveTab('goals')}
+          >
+            <HomePlusIcon name={APP_ICONS.planner.goals} size={16} color={activeTab === 'goals' ? '#FFFFFF' : '#8A8178'} />
+            <AppText variant="micro" tone={activeTab === 'goals' ? 'primary' : 'tertiary'} weight={activeTab === 'goals' ? '700' : '500'} style={activeTab === 'goals' ? S.topbarTabTextActive : S.topbarTabText}>Metas</AppText>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[S.headerRow, { marginBottom: 12 }]}>
+          <View style={{ flex: 1 }}>
             <AppText variant="bodySmall" tone="secondary" style={S.subtitle}>
-              Tareas, eventos y calendario compartido para el hogar.
+              Tareas, eventos y calendario compartido.
             </AppText>
           </View>
           <AppButton title="Actualizar" variant="secondary" size="sm" onPress={() => void refresh()} />
@@ -152,42 +183,36 @@ export function PlannerScreen() {
 
         {!loading && !error && activeTab === 'tasks' ? (
           <>
-            <View style={[S.row, { marginBottom: 14 }]}>
-              <AppCard variant="quiet" padding="compact" style={{ flex: 1, minWidth: 96 }}>
-                <AppText variant="micro" tone="tertiary" weight="700">Pendientes</AppText>
-                <AppText variant="title2">
-                  {summary?.pending_tasks_count ?? 0}
-                </AppText>
-              </AppCard>
-              <AppCard variant="quiet" padding="compact" style={{ flex: 1, minWidth: 96 }}>
-                <AppText variant="micro" tone="tertiary" weight="700">Hoy</AppText>
-                <AppText variant="title2">
-                  {summary?.today_tasks_count ?? 0}
-                </AppText>
-              </AppCard>
-              <AppCard variant="warning" padding="compact" style={{ flex: 1, minWidth: 96 }}>
-                <AppText variant="micro" tone="warning" weight="700">Vencidas</AppText>
-                <AppText variant="title2">
-                  {summary?.overdue_tasks_count ?? 0}
-                </AppText>
-              </AppCard>
-              <AppCard variant="success" padding="compact" style={{ flex: 1, minWidth: 96 }}>
-                <AppText variant="micro" tone="success" weight="700">Por verificar</AppText>
-                <AppText variant="title2">
-                  {summary?.awaiting_verification_count ?? 0}
-                </AppText>
-              </AppCard>
-            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              <View style={[S.row, { gap: 8 }]}>
+                <AppCard variant="quiet" padding="compact" style={S.statCard}>
+                  <AppText variant="micro" tone="tertiary" weight="700" style={S.statLabel}>Pendientes</AppText>
+                  <AppText variant="title2" style={S.statValue}>
+                    {summary?.pending_tasks_count ?? 0}
+                  </AppText>
+                </AppCard>
+                <AppCard variant="quiet" padding="compact" style={S.statCard}>
+                  <AppText variant="micro" tone="tertiary" weight="700" style={S.statLabel}>Hoy</AppText>
+                  <AppText variant="title2" style={S.statValue}>
+                    {summary?.today_tasks_count ?? 0}
+                  </AppText>
+                </AppCard>
+                <AppCard variant="warning" padding="compact" style={S.statCard}>
+                  <AppText variant="micro" tone="warning" weight="700" style={S.statLabel}>Vencidas</AppText>
+                  <AppText variant="title2" style={S.statValue}>
+                    {summary?.overdue_tasks_count ?? 0}
+                  </AppText>
+                </AppCard>
+                <AppCard variant="success" padding="compact" style={S.statCard}>
+                  <AppText variant="micro" tone="success" weight="700" style={S.statLabel}>Por verificar</AppText>
+                  <AppText variant="title2" style={S.statValue}>
+                    {summary?.awaiting_verification_count ?? 0}
+                  </AppText>
+                </AppCard>
+              </View>
+            </ScrollView>
           </>
         ) : null}
-
-        <View style={[S.row, { marginTop: 4, marginBottom: 14 }]}>
-          <ActionPill label="Tareas" selected={activeTab === 'tasks'} onPress={() => setActiveTab('tasks')} />
-          <ActionPill label="Calendario" selected={activeTab === 'calendar'} onPress={() => setActiveTab('calendar')} />
-          <ActionPill label="Metas" selected={activeTab === 'goals'} onPress={() => setActiveTab('goals')} />
-          <ActionPill label="Tarea" tone="primary" onPress={() => setSheet({ type: 'task', mode: 'create' })} />
-          <ActionPill label="Evento" tone="primary" onPress={() => setSheet({ type: 'event', mode: 'create' })} />
-        </View>
 
         {activeTab === 'tasks' ? (
           <PlannerTasksScreen
@@ -224,16 +249,97 @@ export function PlannerScreen() {
         ) : null}
 
         {activeTab === 'goals' ? (
-          <View style={S.emptyBox}>
-            <AppText variant="title3" align="center">Metas</AppText>
-            <AppText variant="bodySmall" tone="secondary" align="center">Proximamente.</AppText>
+          <View style={{ marginTop: 8 }}>
+            <AppText variant="title3" style={{ marginBottom: 4 }}>Metas familiares</AppText>
+            <AppText variant="bodySmall" tone="secondary" style={{ marginBottom: 16 }}>
+              Pequeños avances para organizar mejor la semana.
+            </AppText>
+
+            <View style={[S.card, { marginBottom: 12 }]}>
+              <View style={[S.headerRow, { marginBottom: 8 }]}>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="700">Semana organizada</AppText>
+                  <AppText variant="bodySmall" tone="secondary" style={{ marginTop: 4 }}>
+                    Completen tareas y eventos para mantener el hogar al día.
+                  </AppText>
+                </View>
+                <HomePlusIcon name="checkmark-circle" size={24} color="#5F7F63" />
+              </View>
+              <View style={{ backgroundColor: colors.border.subtle, borderRadius: radius.pill, height: 8, overflow: 'hidden' }}>
+                <View style={{ width: '60%', height: '100%', backgroundColor: colors.sage[500] }} />
+              </View>
+              <AppText variant="micro" tone="tertiary" style={{ marginTop: 8 }}>Vista demo · 60% completado</AppText>
+            </View>
+
+            <View style={[S.card, { marginBottom: 12 }]}>
+              <View style={[S.headerRow, { marginBottom: 8 }]}>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="700">Carga equilibrada</AppText>
+                  <AppText variant="bodySmall" tone="secondary" style={{ marginTop: 4 }}>
+                    Revisá que las responsabilidades estén repartidas.
+                  </AppText>
+                </View>
+                <View style={[S.badge, { alignSelf: 'center' }]}>
+                  <AppText variant="micro" weight="700">En seguimiento</AppText>
+                </View>
+              </View>
+              <AppText variant="bodySmall" tone="tertiary">
+                Distribución de tareas entre miembros del hogar.
+              </AppText>
+            </View>
+
+            <View style={[S.card, { marginBottom: 12 }]}>
+              <View style={[S.headerRow, { marginBottom: 8 }]}>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="body" weight="700">Rutinas del hogar</AppText>
+                  <AppText variant="bodySmall" tone="secondary" style={{ marginTop: 4 }}>
+                    Pronto vas a poder crear hábitos familiares recurrentes.
+                  </AppText>
+                </View>
+                <View style={[S.badge, { backgroundColor: colors.sand[100], alignSelf: 'center' }]}>
+                  <AppText variant="micro" weight="700" tone="tertiary">Próximamente</AppText>
+                </View>
+              </View>
+              <AppText variant="bodySmall" tone="tertiary">
+                Hábitos semanales y mensuales para mantener el orden.
+              </AppText>
+            </View>
+
+            <View style={[S.card, { borderColor: colors.terracotta[300], backgroundColor: colors.terracotta[50] }]}>
+              <View style={[S.headerRow, { marginBottom: 8 }]}>
+                <HomePlusIcon name="sparkles" size={20} color="#8F5735" />
+                <AppText variant="body" weight="700" tone="primary">Más funciones en camino</AppText>
+              </View>
+              <AppText variant="bodySmall" tone="secondary">
+                Estamos trabajando en nuevas formas de ayudar a tu familia a organizarse mejor.
+              </AppText>
+            </View>
           </View>
         ) : null}
       </ScrollView>
 
       <Modal visible={Boolean(sheet)} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
-        <Pressable style={S.sheetBackdrop} onPress={() => setSheet(null)}>
-          <Pressable style={S.sheetPanel}>
+        <Pressable
+          style={S.sheetBackdrop}
+          onPress={() => {
+            Keyboard.dismiss();
+            setSheet(null);
+          }}
+        >
+          <Pressable style={S.sheetPanel} onPress={(e) => e.stopPropagation()}>
+            <View style={S.sheetHandleContainer}>
+              <View style={S.sheetHandle} />
+              <TouchableOpacity
+                style={S.sheetCloseButton}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setSheet(null);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <AppText variant="micro" tone="tertiary" weight="700">Cerrar</AppText>
+              </TouchableOpacity>
+            </View>
             {sheet?.type === 'task' ? (
               <TaskForm
                 mode={sheet.mode}

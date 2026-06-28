@@ -8,7 +8,7 @@ import { listPlannerTasks, type PlannerTask } from '../../services/plannerTasks'
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
 import { useAppRefresh } from '../../context/AppRefreshContext';
-import { ActionPill, AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
+import { AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
 import { colors, radius, spacing } from '../../constants/theme';
 import { APP_ICONS, HomePlusIcon } from '../../constants/icons';
 
@@ -47,7 +47,7 @@ const taskStatusLabel: Record<PlannerTask['status'], string> = {
   cancelled: 'Cancelada',
 };
 
-const sortHomeTasks = (tasks: PlannerTask[], myMembershipId: string) => {
+const sortHomeTasks = (tasks: PlannerTask[], myMembershipId: string, limit = 5) => {
   const today = toDateOnly(new Date());
 
   return [...tasks]
@@ -67,8 +67,39 @@ const sortHomeTasks = (tasks: PlannerTask[], myMembershipId: string) => {
 
       return (left.due_date ?? '9999-12-31').localeCompare(right.due_date ?? '9999-12-31');
     })
-    .slice(0, 5);
+    .slice(0, limit);
 };
+
+function BriefingCard({ summary }: { summary: PlannerSummary | null }) {
+  if (!summary) return null;
+
+  let text = '';
+  if (summary.awaiting_verification_count > 0) {
+    text = `Hay ${summary.awaiting_verification_count} tarea${summary.awaiting_verification_count !== 1 ? 's' : ''} esperando verificación. Conviene empezar por eso.`;
+  } else if (summary.overdue_tasks_count > 0) {
+    text = `Hay ${summary.overdue_tasks_count} tarea${summary.overdue_tasks_count !== 1 ? 's' : ''} vencida${summary.overdue_tasks_count !== 1 ? 's' : ''} que necesitan atención.`;
+  } else if (summary.today_tasks_count > 0) {
+    text = `Hoy quedan ${summary.today_tasks_count} tarea${summary.today_tasks_count !== 1 ? 's' : ''} activa${summary.today_tasks_count !== 1 ? 's' : ''}.`;
+  } else if (summary.upcoming_events_count > 0) {
+    text = `Hay ${summary.upcoming_events_count} evento${summary.upcoming_events_count !== 1 ? 's' : ''} próximo${summary.upcoming_events_count !== 1 ? 's' : ''} para coordinar.`;
+  } else {
+    text = 'Tu hogar está tranquilo por ahora.';
+  }
+
+  return (
+    <AppCard variant="warning" padding="default" style={styles.briefingCard}>
+      <View style={styles.briefingHeader}>
+        <HomePlusIcon name={APP_ICONS.home.geni} color={colors.warning.base} size={18} />
+        <AppText variant="micro" tone="warning" weight="700" style={styles.cardLabelSmall}>Geni · resumen del hogar</AppText>
+      </View>
+      <AppText variant="bodySmall" tone="secondary" style={styles.briefingText}>{text}</AppText>
+      <AppText variant="caption" tone="tertiary" style={styles.demoLabel}>Resumen automático · demo</AppText>
+      <TouchableOpacity style={styles.briefingCta} accessibilityRole="button">
+        <AppText variant="caption" tone="warning" weight="700">Chatear con Geni</AppText>
+      </TouchableOpacity>
+    </AppCard>
+  );
+}
 
 export function useHomePlannerData() {
   const { session, authMe } = useAuth();
@@ -113,7 +144,7 @@ export function useHomePlannerData() {
       ]);
 
       setSummary(nextSummary);
-      setTasks(sortHomeTasks(tasksResponse.tasks, myMembershipId));
+      setTasks(sortHomeTasks(tasksResponse.tasks, myMembershipId, 3));
       setEvents((eventsResponse.events.length > 0 ? eventsResponse.events : nextSummary.upcoming_events).slice(0, 3));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No pudimos cargar datos del Planner.');
@@ -163,15 +194,9 @@ export function HomePlannerSections({ variant = 'light' }: Props) {
     });
   };
 
-  const mock = (label: string) => Alert.alert(label, 'Proximamente.');
-
   return (
     <View style={styles.container}>
-      <View style={styles.actionsRow}>
-        <ActionPill label="Crear tarea" selected onPress={() => openPlanner('tasks', 'task')} />
-        <ActionPill label="Crear evento" tone="primary" onPress={() => openPlanner('calendar', 'event')} />
-        <ActionPill label="Geni" tone="success" onPress={() => mock('Preguntar a Geni')} />
-      </View>
+      <BriefingCard summary={summary} />
 
       {error ? (
         <ErrorState title="No pudimos cargar Planner" description={error} style={styles.stateCard} />
@@ -297,7 +322,6 @@ export function HomePlannerSections({ variant = 'light' }: Props) {
 
 const styles = StyleSheet.create({
   container: { gap: spacing[3] },
-  actionsRow: { flexDirection: 'row', gap: spacing[2], flexWrap: 'wrap', marginBottom: spacing[1] },
   card: { marginBottom: spacing[1] },
   stateCard: { marginBottom: spacing[1] },
   cardHeader: {
@@ -311,6 +335,36 @@ const styles = StyleSheet.create({
     minWidth: 24,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  briefingCard: {
+    backgroundColor: colors.warning.soft,
+    marginBottom: spacing[3],
+  },
+  briefingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  cardLabelSmall: {
+    fontSize: 11,
+    letterSpacing: 0.8,
+    color: colors.text.tertiary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  briefingText: {
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  demoLabel: {
+    fontSize: 11,
+    color: colors.text.tertiary,
+    marginBottom: 8,
+  },
+  briefingCta: {
+    paddingTop: 4,
   },
   itemRow: {
     flexDirection: 'row',

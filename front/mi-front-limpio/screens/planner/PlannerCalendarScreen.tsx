@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { ApiError } from '../../services/api';
 import { getPlannerCalendar, type PlannerCalendarEventItem, type PlannerCalendarItem, type PlannerCalendarView } from '../../services/plannerCalendar';
 import { cancelPlannerEvent } from '../../services/plannerEvents';
@@ -18,6 +18,7 @@ import {
   recurrenceLabels,
   statusLabels,
 } from './plannerShared';
+import { spacing } from '../../constants/theme';
 
 type Props = {
   refreshKey?: number;
@@ -194,36 +195,36 @@ const handleEditEvent = (item: PlannerCalendarEventItem) => {
 
   return (
     <View>
-      <View style={[S.headerRow, { marginBottom: 14 }]}>
+      <View style={[S.headerRow, { marginBottom: 12 }]}>
         <Text style={S.sectionTitle}>Calendario</Text>
         <TouchableOpacity style={S.primaryBtn} onPress={onCreateEvent}>
           <Text style={S.btnText}>Nuevo evento</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={[S.row, { marginBottom: 12 }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
         {viewOptions.map((item) => {
           const active = view === item.key;
           return (
             <TouchableOpacity
               key={item.key}
-              style={[S.chip, active && S.chipActive]}
+              style={[S.filterChip, active && S.filterChipActive]}
               onPress={() => setView(item.key)}
             >
-              <Text style={[S.chipText, active && S.chipTextActive]}>{item.label}</Text>
+              <Text style={[S.filterChipText, active && S.filterChipTextActive]}>{item.label}</Text>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
-      <View style={[S.headerRow, { marginBottom: 14 }]}>
-        <TouchableOpacity style={S.secondaryBtn} onPress={() => setSelectedDate((prev) => moveDate(prev, view, -1))}>
+      <View style={[S.row, { marginBottom: 10 }]}>
+        <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => setSelectedDate((prev) => moveDate(prev, view, -1))}>
           <Text style={S.secondaryText}>Anterior</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={S.secondaryBtn} onPress={() => setSelectedDate(new Date())}>
+        <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => setSelectedDate(new Date())}>
           <Text style={S.secondaryText}>Hoy</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={S.secondaryBtn} onPress={() => setSelectedDate((prev) => moveDate(prev, view, 1))}>
+        <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => setSelectedDate((prev) => moveDate(prev, view, 1))}>
           <Text style={S.secondaryText}>Siguiente</Text>
         </TouchableOpacity>
       </View>
@@ -232,7 +233,7 @@ const handleEditEvent = (item: PlannerCalendarEventItem) => {
         {view === 'month' ? 'Agenda mensual' : view === 'week' ? 'Agenda semanal' : 'Agenda del dia'} · {formatDate(dateToYMD(selectedDate))}
       </Text>
 
-      <View style={S.monthGrid}>
+      <View style={[S.monthGrid, { marginBottom: 16 }]}>
         {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, index) => (
           <Text key={`${day}-${index}`} style={S.monthWeekday}>{day}</Text>
         ))}
@@ -290,7 +291,7 @@ const handleEditEvent = (item: PlannerCalendarEventItem) => {
         ? ([[selectedDateKey, selectedDateItems] as [string, PlannerCalendarItem[]]])
             .filter(([, dateItems]) => dateItems.length > 0)
             .map(([dateKey, dateItems]) => (
-            <View key={dateKey} style={{ marginBottom: 8 }}>
+            <View key={dateKey} style={{ marginBottom: 12 }}>
               <Text style={[S.label, { marginTop: 8 }]}>{formatDate(dateKey)}</Text>
               {dateItems.map((item) => {
                 const uniqueKey = item.type === 'event' ? item.occurrence_id ?? item.id : item.id;
@@ -298,27 +299,27 @@ const handleEditEvent = (item: PlannerCalendarEventItem) => {
 
                 if (item.type === 'event') {
                   return (
-                    <View key={uniqueKey} style={S.card}>
+                    <View key={uniqueKey} style={[S.card, { padding: spacing[3], marginBottom: spacing[2] }]}>
                       <View style={[S.headerRow, { alignItems: 'flex-start' }]}>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ color: '#17201A', fontSize: 16, fontWeight: '800' }}>{item.title}</Text>
-                          <Text style={[S.muted, { marginTop: 4 }]}>
-                            {item.all_day ? 'Todo el dia' : `${formatTime(item.starts_at)} ${formatTime(item.ends_at)}`}
+                          <Text style={{ color: '#17201A', fontSize: 15, fontWeight: '800' }}>{item.title}</Text>
+                          <Text style={[S.muted, { marginTop: 2, fontSize: 12 }]}>
+                            {item.all_day ? 'Todo el dia' : `${formatTime(item.starts_at)} - ${formatTime(item.ends_at)}`}
                           </Text>
                         </View>
-                        <View style={S.badge}>
+                        <View style={[S.badge, { alignSelf: 'center' }]}>
                           <Text style={S.badgeText}>Evento</Text>
                         </View>
                       </View>
-                      <Text style={[S.muted, { marginTop: 8 }]}>
+                      <Text style={[S.muted, { marginTop: 6, fontSize: 12 }]}>
                         {item.location_name || 'Sin ubicacion'} · {recurrenceLabels[item.recurrence]}
                       </Text>
-                      <View style={[S.row, { marginTop: 12 }]}>
-                        <TouchableOpacity style={S.secondaryBtn} onPress={() => handleEditEvent(item)}>
+                      <View style={[S.row, { marginTop: 10 }]}>
+                        <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => handleEditEvent(item)}>
                           <Text style={S.secondaryText}>Editar</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[S.dangerBtn, isSaving && { opacity: 0.6 }]}
+                          style={[S.dangerBtn, { minHeight: 36, paddingVertical: 6 }, isSaving && { opacity: 0.6 }]}
                           onPress={() => confirmCancelEvent(item.id)}
                           disabled={isSaving}
                         >
@@ -330,29 +331,29 @@ const handleEditEvent = (item: PlannerCalendarEventItem) => {
                 }
 
                 return (
-                  <View key={uniqueKey} style={S.card}>
+                  <View key={uniqueKey} style={[S.card, { padding: spacing[3], marginBottom: spacing[2] }]}>
                     <View style={[S.headerRow, { alignItems: 'flex-start' }]}>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#17201A', fontSize: 16, fontWeight: '800' }}>{item.title}</Text>
-                        <Text style={[S.muted, { marginTop: 4 }]}>
+                        <Text style={{ color: '#17201A', fontSize: 15, fontWeight: '800' }}>{item.title}</Text>
+                        <Text style={[S.muted, { marginTop: 2, fontSize: 12 }]}>
                           {formatTime(item.due_time)} · {priorityLabels[item.priority]} · {statusLabels[item.status]}
                         </Text>
                       </View>
-                      <View style={S.badge}>
+                      <View style={[S.badge, { alignSelf: 'center' }]}>
                         <Text style={S.badgeText}>Tarea</Text>
                       </View>
                     </View>
-                    <View style={[S.row, { marginTop: 12 }]}>
+                    <View style={[S.row, { marginTop: 10 }]}>
                       {['pending', 'awaiting_verification'].includes(item.status) ? (
                         <TouchableOpacity
-                          style={[S.secondaryBtn, isSaving && { opacity: 0.6 }]}
+                          style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }, isSaving && { opacity: 0.6 }]}
                           onPress={() => void completeTask(item.id)}
                           disabled={isSaving}
                         >
                           <Text style={S.secondaryText}>Completar</Text>
                         </TouchableOpacity>
                       ) : null}
-                      <TouchableOpacity style={S.secondaryBtn} onPress={() => onEditTask?.(item.id)}>
+                      <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => onEditTask?.(item.id)}>
                         <Text style={S.secondaryText}>Editar</Text>
                       </TouchableOpacity>
                     </View>

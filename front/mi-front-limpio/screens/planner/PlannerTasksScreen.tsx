@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { ApiError } from '../../services/api';
 import {
   cancelPlannerTask,
@@ -7,6 +7,7 @@ import {
   listPlannerTasks,
   verifyPlannerTask,
   type PlannerTask,
+  type PlannerTaskPriority,
 } from '../../services/plannerTasks';
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
@@ -91,7 +92,7 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
   const visibleTasks = useMemo(() => {
     const today = dateToYMD(new Date());
 
-    return tasks.filter((task) => {
+    const filtered = tasks.filter((task) => {
       const isOpen = ['pending', 'awaiting_verification'].includes(task.status);
       if (filter === 'mine') return isOpen && task.assigned_to_member_id === myMembershipId;
       if (filter === 'family') return isOpen;
@@ -101,6 +102,28 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
       if (filter === 'done') return ['completed', 'verified'].includes(task.status);
       if (filter === 'cancelled') return task.status === 'cancelled';
       return isOpen;
+    });
+
+    const getPriorityScore = (task: PlannerTask) => {
+      if (task.status === 'pending' && task.due_date && task.due_date < today) return 0;
+      if (task.status === 'awaiting_verification') return 1;
+      if (task.due_date === today) return 2;
+      if (task.due_date && task.due_date > today) return 3;
+      if (task.status === 'pending') return 4;
+      return 5;
+    };
+
+    const priorityOrder: Record<PlannerTaskPriority, number> = {
+      critical: 0,
+      high: 1,
+      medium: 2,
+      low: 3,
+    };
+
+    return filtered.sort((a, b) => {
+      const priorityDiff = getPriorityScore(a) - getPriorityScore(b);
+      if (priorityDiff !== 0) return priorityDiff;
+      return priorityOrder[a.priority] - priorityOrder[b.priority];
     });
   }, [filter, myMembershipId, tasks]);
 
@@ -193,27 +216,27 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
 
   return (
     <View>
-      <View style={[S.headerRow, { marginBottom: 14 }]}>
+      <View style={[S.headerRow, { marginBottom: 12 }]}>
         <Text style={S.sectionTitle}>Tareas</Text>
         <TouchableOpacity style={S.primaryBtn} onPress={onCreateTask}>
           <Text style={S.btnText}>Nueva tarea</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={[S.row, { marginBottom: 14 }]}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
         {filters.map((item) => {
           const active = filter === item.key;
           return (
             <TouchableOpacity
               key={item.key}
-              style={[S.chip, active && S.chipActive]}
+              style={[S.filterChip, active && S.filterChipActive]}
               onPress={() => setFilter(item.key)}
             >
-              <Text style={[S.chipText, active && S.chipTextActive]}>{item.label}</Text>
+              <Text style={[S.filterChipText, active && S.filterChipTextActive]}>{item.label}</Text>
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       {visibleTasks.length === 0 ? (
         <View style={S.emptyBox}>

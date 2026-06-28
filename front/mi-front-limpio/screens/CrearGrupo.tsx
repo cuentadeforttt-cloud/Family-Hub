@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Keyboard,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  ActivityIndicator,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthScreenLayout } from '../components/AuthScreenLayout';
+import { AppLogo } from '../components/AppLogo';
 import { useAuth } from '../context/AuthContext';
 import { createHousehold } from '../services/households';
 import type { PrivateStackParamList } from '../navigation/types';
@@ -45,6 +46,7 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
   const [tipoFamilia, setTipoFamilia] = useState<FamilyType>('nucleo');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [focusedInput, setFocusedInput] = useState<'household' | 'join' | null>(null);
 
   const handleCreate = async () => {
     Keyboard.dismiss();
@@ -57,7 +59,7 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
     const accessToken = session?.access_token;
 
     if (!accessToken) {
-      setErrorMessage('Tu sesion expiro. Inicia sesion nuevamente.');
+      setErrorMessage('Tu sesión expiró. Iniciá sesión nuevamente.');
       return;
     }
 
@@ -77,7 +79,7 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
     setLoading(false);
   };
 
-  const handleSignOut = async () => {
+const handleSignOut = async () => {
     await signOut();
   };
 
@@ -86,7 +88,7 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
     const token = extractJoinToken(joinToken);
 
     if (!token) {
-      setErrorMessage('Pega el link o token de invitacion para unirte.');
+      setErrorMessage('Pegá el link o token de invitación para unirte.');
       return;
     }
 
@@ -94,117 +96,147 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
     navigation.navigate('JoinHousehold', { token });
   };
 
-  return (
-    <AuthScreenLayout screenIndicator="02 - CREAR GRUPO">
-      <View style={styles.topBar}>
-        <Text style={styles.userEmail} numberOfLines={1}>{user?.email ?? ''}</Text>
-        <TouchableOpacity onPress={() => void handleSignOut()} accessibilityRole="button">
-          <Text style={styles.logoutText}>Cerrar sesión</Text>
-        </TouchableOpacity>
-      </View>
+return (
+    <AuthScreenLayout screenIndicator="02 - CREAR GRUPO" dismissKeyboardOnTapOutside={false}>
+            <View style={styles.inner}>
+              <View style={styles.topBar}>
+                <Text style={styles.userEmail} numberOfLines={1}>{user?.email ?? ''}</Text>
+                <TouchableOpacity onPress={() => void handleSignOut()} accessibilityRole="button">
+                  <Text style={styles.logoutText}>Cerrar sesión</Text>
+                </TouchableOpacity>
+              </View>
 
-      <View style={styles.header}>
-        <Text style={styles.icon}>🏠 ❤️</Text>
-        <Text style={styles.title}>Nombra tu hogar</Text>
-        <Text style={styles.subtitle}>
-          Este será el espacio privado de tu familia.{'\n'}Solo las personas que invites pueden entrar.
-        </Text>
-      </View>
+              <View style={styles.header}>
+                <AppLogo size={40} rounded />
+                <Text style={styles.title}>Nombra tu hogar</Text>
+                <Text style={styles.subtitle}>
+                  Este será el espacio privado de tu familia.{'\n'}Solo las personas que invites pueden entrar.
+                </Text>
+              </View>
 
-      <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder="Familia García"
-          placeholderTextColor="#A3A3A3"
-          returnKeyType="done"
-          editable={!loading}
-          value={nombreHogar}
-          onChangeText={(v) => { setErrorMessage(null); setNombreHogar(v); }}
-          onSubmitEditing={() => void handleCreate()}
-        />
+<View style={styles.form}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    focusedInput === 'household' ? styles.inputFocused : null,
+                    errorMessage && !nombreHogar.trim() ? styles.inputError : null,
+                    loading ? styles.inputDisabled : null,
+                  ]}
+                  placeholder="Familia García"
+                  placeholderTextColor="#746D66"
+                  returnKeyType="done"
+                  editable={!loading}
+                  value={nombreHogar}
+                  onFocus={() => setFocusedInput('household')}
+                  onBlur={() => setFocusedInput(null)}
+                  onChangeText={(v) => { setErrorMessage(null); setNombreHogar(v); }}
+                  onSubmitEditing={() => void handleCreate()}
+                />
 
-        <Text style={styles.label}>¿Qué describe mejor a tu familia?</Text>
+                <Text style={styles.label}>¿Qué describe mejor a tu familia?</Text>
 
-        <View style={styles.pillsContainer}>
-          {FAMILY_TYPES.map(({ id, icon, label }) => (
-            <TouchableOpacity
-              key={id}
-              style={[styles.pill, tipoFamilia === id && styles.pillSelected]}
-              onPress={() => setTipoFamilia(id)}
-              disabled={loading}
-            >
-              <Text style={styles.pillText}>{icon} {label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+                <View style={styles.pillsContainer}>
+                  {FAMILY_TYPES.map(({ id, icon, label }) => (
+                    <TouchableOpacity
+                      key={id}
+                      style={[styles.pill, tipoFamilia === id && styles.pillSelected]}
+                      onPress={() => setTipoFamilia(id)}
+                      disabled={loading}
+                    >
+                      <Text style={styles.pillText}>{icon} {label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+                {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
-        <TouchableOpacity
-          style={[styles.primaryButton, loading && styles.buttonDisabled]}
-          onPress={() => void handleCreate()}
-          disabled={loading}
-          accessibilityRole="button"
-          accessibilityLabel="Crear hogar"
-        >
-          {loading
-            ? <ActivityIndicator color="#FFFFFF" />
-            : <Text style={styles.primaryButtonText}>Crear hogar</Text>
-          }
-        </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, loading && styles.buttonDisabled]}
+                  onPress={() => void handleCreate()}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Crear hogar"
+                >
+                  {loading
+                    ? <ActivityIndicator color="#FFFFFF" />
+                    : <Text style={styles.primaryButtonText}>Crear hogar</Text>
+                  }
+                </TouchableOpacity>
 
-        <View style={styles.separator}>
-          <View style={styles.separatorLine} />
-          <Text style={styles.separatorText}>o</Text>
-          <View style={styles.separatorLine} />
-        </View>
+                <View style={styles.separator}>
+                  <View style={styles.separatorLine} />
+                  <Text style={styles.separatorText}>o</Text>
+                  <View style={styles.separatorLine} />
+                </View>
 
-        <Text style={styles.label}>Unirte a un hogar existente</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Pega aca tu link o token"
-          placeholderTextColor="#A3A3A3"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="done"
-          editable={!loading}
-          value={joinToken}
-          onChangeText={(v) => { setErrorMessage(null); setJoinToken(v); }}
-          onSubmitEditing={handleJoin}
-        />
+                <Text style={styles.label}>Unirte a un hogar existente</Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    focusedInput === 'join' ? styles.inputFocused : null,
+                    errorMessage && !joinToken.trim() && nombreHogar.trim() ? styles.inputError : null,
+                    loading ? styles.inputDisabled : null,
+                  ]}
+                  placeholder="Pegá acá tu link o token"
+                  placeholderTextColor="#746D66"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  editable={!loading}
+                  value={joinToken}
+                  onFocus={() => setFocusedInput('join')}
+                  onBlur={() => setFocusedInput(null)}
+                  onChangeText={(v) => { setErrorMessage(null); setJoinToken(v); }}
+                  onSubmitEditing={handleJoin}
+                />
 
-        <TouchableOpacity
-          style={[styles.secondaryButton, loading && styles.buttonDisabled]}
-          onPress={handleJoin}
-          disabled={loading}
-          accessibilityRole="button"
-          accessibilityLabel="Unirme con invitacion"
-        >
-          <Text style={styles.secondaryButtonText}>Unirme con invitacion</Text>
-        </TouchableOpacity>
-      </View>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, loading && styles.buttonDisabled]}
+                  onPress={handleJoin}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Unirme con invitación"
+                >
+                  <Text style={styles.secondaryButtonText}>Unirme con invitación</Text>
+</TouchableOpacity>
+              </View>
+            </View>
     </AuthScreenLayout>
   );
 };
 
 const styles = StyleSheet.create({
+  inner: { width: '100%' },
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   userEmail: { fontSize: 12, color: '#6B6B6B', flex: 1, marginRight: 12 },
   logoutText: { color: '#CD7353', fontSize: 13, fontWeight: '600' },
   header: { alignItems: 'center', marginBottom: 32 },
-  icon: { fontSize: 50, marginBottom: 16 },
   title: { fontSize: 26, fontWeight: '700', color: '#1C1C1C', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#6B6B6B', textAlign: 'center', lineHeight: 22 },
   form: { width: '100%' },
   input: {
-    backgroundColor: '#F3F2EE',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2DFD6',
+    borderColor: '#E8E3DC',
     borderRadius: 12,
-    padding: 16,
+    minHeight: 56,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     color: '#1C1C1C',
     marginBottom: 32,
     fontSize: 16,
+  },
+  inputFocused: {
+    borderColor: '#CD7353',
+    backgroundColor: '#FFFFFF',
+  },
+  inputError: {
+    borderColor: '#C46B6B',
+  },
+  inputDisabled: {
+    backgroundColor: '#F3F0EB',
+    borderColor: '#D8D1C8',
+    color: '#6B6560',
   },
   label: { fontSize: 14, color: '#1C1C1C', fontWeight: '500', marginBottom: 16 },
   pillsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 40 },

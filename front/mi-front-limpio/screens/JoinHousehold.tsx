@@ -12,6 +12,7 @@ import type { PrivateStackParamList } from '../navigation/types';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { joinHouseholdByToken } from '../services/invitations';
+import { AppLogo } from '../components/AppLogo';
 
 type Props = NativeStackScreenProps<PrivateStackParamList, 'JoinHousehold'>;
 
@@ -76,7 +77,7 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={styles.successEmoji}>🏠</Text>
+          <AppLogo size={56} rounded />
           <Text style={styles.successTitle}>Solicitud enviada</Text>
           <Text style={styles.successSubtitle}>El coordinador tiene que aprobar tu acceso.</Text>
           <ActivityIndicator size="small" color="#7C9E7A" style={{ marginTop: 20 }} />
@@ -92,7 +93,7 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.center}>
-        <Text style={styles.errorEmoji}>{isAlreadyMember ? '🏠' : '⚠️'}</Text>
+        <AppLogo size={48} rounded />
         <Text style={styles.errorTitle}>
           {isAlreadyMember ? 'Ya sos parte de este hogar' : 'No pudimos procesar la invitación'}
         </Text>
@@ -127,12 +128,12 @@ const styles = StyleSheet.create({
   loadingSubtitle: { fontSize: 15, color: '#6B6B6B', textAlign: 'center' },
 
   // Success
-  successEmoji: { fontSize: 56, marginBottom: 16 },
+  successEmoji: { marginBottom: 16 },
   successTitle: { fontSize: 24, fontWeight: '800', color: '#1C1C1C', textAlign: 'center', marginBottom: 8 },
   successSubtitle: { fontSize: 15, color: '#6B6B6B', textAlign: 'center' },
 
   // Error
-  errorEmoji: { fontSize: 48, marginBottom: 16 },
+
   errorTitle: { fontSize: 22, fontWeight: '700', color: '#1C1C1C', textAlign: 'center', marginBottom: 16 },
   errorCard: {
     backgroundColor: '#FFF3EE',

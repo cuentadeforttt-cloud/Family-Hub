@@ -1,14 +1,31 @@
 import React, { useRef, useState } from 'react';
 import { Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { AppLogo } from '../components/AppLogo';
 import { AuthScreenLayout } from '../components/AuthScreenLayout';
 import { AuthTextInput } from '../components/AuthTextInput';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
+import { authErrorHaptic, authSuccessHaptic } from '../utils/haptics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const getLoginErrorMessage = (message: string) => {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes('network')
+    || normalized.includes('fetch')
+    || normalized.includes('conectar')
+    || normalized.includes('servidor')
+  ) {
+    return 'No pudimos conectarnos. Probá de nuevo en unos segundos.';
+  }
+
+  return 'No pudimos iniciar sesión. Revisá tu correo y contraseña.';
+};
 
 export const LoginScreen = ({ navigation }: Props) => {
   const { signIn } = useAuth();
@@ -34,17 +51,20 @@ export const LoginScreen = ({ navigation }: Props) => {
     const trimmedEmail = email.trim();
 
     if (!trimmedEmail) {
-      setErrorMessage('Ingresa tu email para continuar.');
+      void authErrorHaptic();
+      setErrorMessage('Ingresa tu correo para continuar.');
       return;
     }
 
     if (!EMAIL_REGEX.test(trimmedEmail)) {
-      setErrorMessage('Ingresa un email valido.');
+      void authErrorHaptic();
+      setErrorMessage('Ingresá un correo válido.');
       return;
     }
 
     if (!password.trim()) {
-      setErrorMessage('Ingresa tu contrasena para continuar.');
+      void authErrorHaptic();
+      setErrorMessage('Ingresá tu contraseña para continuar.');
       return;
     }
 
@@ -57,19 +77,22 @@ export const LoginScreen = ({ navigation }: Props) => {
     });
 
     if (result.error) {
-      setErrorMessage(result.error);
+      void authErrorHaptic();
+      setErrorMessage(getLoginErrorMessage(result.error));
+    } else {
+      void authSuccessHaptic();
     }
 
     setLoading(false);
   };
 
   return (
-    <AuthScreenLayout screenIndicator="01 - LOGIN" centerContent>
+    <AuthScreenLayout screenIndicator="01 - LOGIN" centerContent presentation="premium">
       <View style={styles.header}>
-        <Text style={styles.icon}>👋</Text>
-        <Text style={styles.title}>Hola de nuevo</Text>
+        <AppLogo size={70} rounded style={styles.logo} />
+        <Text style={styles.title}>Entra a tu hogar</Text>
         <Text style={styles.subtitle}>
-          Ingresa tus credenciales para entrar a tu hogar.
+          Organiza tareas, eventos y momentos familiares desde un solo lugar.
         </Text>
       </View>
 
@@ -95,8 +118,8 @@ export const LoginScreen = ({ navigation }: Props) => {
 
         <AuthTextInput
           ref={passwordInputRef}
-          label="Contrasena"
-          placeholder="Tu contrasena"
+          label="Contraseña"
+          placeholder="Tu contraseña"
           isPasswordField
           autoCapitalize="none"
           autoCorrect={false}
@@ -119,10 +142,10 @@ export const LoginScreen = ({ navigation }: Props) => {
           onPress={() => void submitLogin()}
           disabled={loading}
           accessibilityRole="button"
-          accessibilityLabel="Iniciar sesion"
+          accessibilityLabel="Iniciar sesión"
         >
           <Text style={styles.primaryButtonText}>
-            {loading ? 'Ingresando...' : 'Iniciar sesion'}
+            {loading ? 'Ingresando...' : 'Iniciar sesión'}
           </Text>
         </TouchableOpacity>
 
@@ -131,9 +154,9 @@ export const LoginScreen = ({ navigation }: Props) => {
           onPress={() => navigation.navigate('ForgotPassword')}
           disabled={loading}
           accessibilityRole="button"
-          accessibilityLabel="Recuperar contrasena"
+          accessibilityLabel="Recuperar contraseña"
         >
-          <Text style={styles.forgotText}>Olvide mi contrasena</Text>
+          <Text style={styles.forgotText}>Olvidé mi contraseña</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -143,7 +166,7 @@ export const LoginScreen = ({ navigation }: Props) => {
           accessibilityRole="button"
           accessibilityLabel="Ir a registro"
         >
-          <Text style={styles.linkText}>No tienes cuenta? Registrate aca</Text>
+          <Text style={styles.linkText}>No tenes cuenta? Crea tu espacio familiar</Text>
         </TouchableOpacity>
       </View>
     </AuthScreenLayout>
@@ -151,14 +174,23 @@ export const LoginScreen = ({ navigation }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  header: { alignItems: 'center', marginBottom: 32 },
-  icon: { fontSize: 60, marginBottom: 16 },
-  title: { fontSize: 26, fontWeight: '700', color: '#1C1C1C', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#6B6B6B', textAlign: 'center' },
+  header: { alignItems: 'center', marginBottom: 30 },
+  logo: { marginBottom: 18 },
+  title: { fontSize: 27, fontWeight: '700', color: '#1A1714', marginBottom: 8, textAlign: 'center' },
+  subtitle: { fontSize: 15, color: '#6B6560', textAlign: 'center', lineHeight: 22 },
   form: { width: '100%' },
-  errorText: { color: '#B6472C', fontSize: 13, marginBottom: 12, lineHeight: 18 },
+  errorText: {
+    color: '#A85050',
+    fontSize: 13,
+    marginBottom: 12,
+    lineHeight: 18,
+    backgroundColor: '#F5E2E2',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   primaryButton: {
-    backgroundColor: '#CD7353',
+    backgroundColor: '#C17F59',
     width: '100%',
     paddingVertical: 16,
     borderRadius: 12,
@@ -168,7 +200,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   buttonDisabled: { opacity: 0.6 },
   forgotButton: { marginTop: 16, alignItems: 'center' },
-  forgotText: { color: '#6B6B6B', fontSize: 14, fontWeight: '500' },
+  forgotText: { color: '#6B6560', fontSize: 14, fontWeight: '600' },
   linkButton: { marginTop: 24, alignItems: 'center' },
-  linkText: { color: '#CD7353', fontSize: 14, fontWeight: '600' },
+  linkText: { color: '#A86B45', fontSize: 14, fontWeight: '700', textAlign: 'center' },
 });

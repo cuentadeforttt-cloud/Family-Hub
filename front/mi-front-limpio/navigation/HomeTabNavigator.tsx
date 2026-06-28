@@ -1,4 +1,5 @@
 import React from 'react';
+import { Animated } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
@@ -16,59 +17,70 @@ import { CreateTaskScreen } from '../screens/planner/CreateTaskScreen';
 import { EditTaskScreen } from '../screens/planner/EditTaskScreen';
 import { CreateEventScreen } from '../screens/planner/CreateEventScreen';
 import { EditEventScreen } from '../screens/planner/EditEventScreen';
+import { APP_ICONS, HomePlusIcon } from '../constants/icons';
 
 const Tab = createBottomTabNavigator<HomeTabParamList>();
 const PlannerStack = createNativeStackNavigator<PlannerStackParamList>();
 
 const TabIcon = ({
-  mark,
+  iconKey,
   label,
   focused,
 }: {
-  mark: string;
+  iconKey: keyof typeof APP_ICONS.bottomTabs;
   label: string;
   focused: boolean;
-}) => (
-  <View style={{ alignItems: 'center', paddingTop: 6, minWidth: 48 }}>
-    <Text
-      style={{
-        fontSize: 15,
-        width: 28,
-        height: 24,
-        borderRadius: 12,
-        textAlign: 'center',
-        lineHeight: 24,
-        overflow: 'hidden',
-        color: '#FFF8EA',
-        backgroundColor: focused ? 'rgba(255,248,234,0.22)' : 'transparent',
-        fontWeight: '900',
-      }}
-    >
-      {mark}
-    </Text>
-    <Text
-      style={{
-        fontSize: 9,
-        marginTop: 2,
-        fontWeight: focused ? '700' : '400',
-        color: focused ? '#FFF8EA' : 'rgba(255,248,234,0.76)',
-      }}
-    >
-      {label}
-    </Text>
-    {focused && (
-      <View
+}) => {
+  const iconName = APP_ICONS.bottomTabs[iconKey];
+  const iconColor = '#FFF8EA';
+  const scale = React.useRef(new Animated.Value(1)).current;
+  
+  React.useEffect(() => {
+    Animated.timing(scale, {
+      toValue: focused ? 1.06 : 1,
+      duration: 140,
+      useNativeDriver: true,
+    }).start();
+  }, [focused, scale]);
+  
+  return (
+    <View style={{ alignItems: 'center', paddingTop: 6, minWidth: 48 }}>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <HomePlusIcon
+          name={iconName}
+          size={24}
+          color={iconColor}
+          style={{
+            backgroundColor: focused ? 'rgba(255,248,234,0.22)' : 'transparent',
+            borderRadius: 12,
+            padding: 2,
+          }}
+        />
+      </Animated.View>
+      <Text
         style={{
-          width: 4,
-          height: 4,
-          borderRadius: 2,
-          backgroundColor: '#FFF8EA',
+          fontSize: 9,
           marginTop: 2,
+          fontWeight: focused ? '700' : '400',
+          color: focused ? '#FFF8EA' : 'rgba(255,248,234,0.76)',
         }}
-      />
-    )}
-  </View>
-);
+      >
+        {label}
+      </Text>
+      {focused && (
+        <View
+          style={{
+            width: 4,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: '#FFF8EA',
+            marginTop: 2,
+          }}
+        />
+      )}
+    </View>
+  );
+};
 
 function HomeScreen() {
   const { currentRole, loading, reloading } = useHousehold();
@@ -111,6 +123,38 @@ function QuickAddTabButton() {
   const navigation = useNavigation<any>();
   const [visible, setVisible] = React.useState(false);
   const pendingAction = React.useRef<(() => void) | null>(null);
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const slideAnim = React.useRef(new Animated.Value(20)).current;
+
+  React.useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 20,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible, fadeAnim, slideAnim]);
 
   const runAfterQuickActionsClosed = (callback: () => void) => {
     pendingAction.current = callback;
@@ -169,16 +213,22 @@ const showSoon = () => {
           elevation: 8,
         }}
       >
-        <Text style={{ color: '#CD7353', fontSize: 34, fontWeight: '800', lineHeight: 38 }}>+</Text>
+        <HomePlusIcon
+          name={APP_ICONS.bottomTabs.add}
+          size={34}
+          color="#CD7353"
+        />
       </TouchableOpacity>
 
-      <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
+<Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
         <Pressable
           style={{ flex: 1, backgroundColor: 'rgba(23,32,26,0.36)', justifyContent: 'flex-end' }}
           onPress={() => setVisible(false)}
         >
-          <Pressable
+          <Animated.View
             style={{
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
               backgroundColor: '#FFF8EA',
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
@@ -187,35 +237,55 @@ const showSoon = () => {
               borderTopWidth: 1,
               borderColor: '#E5D8C7',
             }}
+            onStartShouldSetResponder={() => true}
           >
-            <Text style={{ color: '#17201A', fontSize: 22, fontWeight: '900', marginBottom: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 14, position: 'relative' }}>
+              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5D8C7', opacity: 0.8 }} />
+              <TouchableOpacity
+                style={{ position: 'absolute', right: 0, top: -4, paddingHorizontal: 12, paddingVertical: 6 }}
+                onPress={() => setVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={{ color: '#8A8178', fontSize: 13, fontWeight: '700' }}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ color: '#17201A', fontSize: 22, fontWeight: '900', marginBottom: 4, textAlign: 'center' }}>
               Acciones rapidas
             </Text>
-            <Text style={{ color: '#6E6254', fontSize: 14, marginBottom: 18 }}>
+            <Text style={{ color: '#6E6254', fontSize: 14, marginBottom: 18, textAlign: 'center' }}>
               Crear en el Planner del hogar.
             </Text>
-            <TouchableOpacity
+<TouchableOpacity
               activeOpacity={0.86}
-              style={{ backgroundColor: '#CD7353', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, marginBottom: 10 }}
+              style={{ backgroundColor: '#CD7353', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }}
               onPress={() => openPlannerRoute('tasks', 'task')}
             >
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,248,234,0.25)', alignItems: 'center', justifyContent: 'center' }}>
+                <HomePlusIcon name={APP_ICONS.quickActions.createTask} size={20} color="#FFF8EA" />
+              </View>
               <Text style={{ color: '#FFF8EA', fontWeight: '900', fontSize: 16 }}>Crear tarea</Text>
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.86}
-              style={{ backgroundColor: '#FFFFFF', borderColor: '#CD7353', borderWidth: 1, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16 }}
+              style={{ backgroundColor: '#FFFFFF', borderColor: '#CD7353', borderWidth: 1, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
               onPress={() => openPlannerRoute('calendar', 'event')}
             >
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(205,115,83,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                <HomePlusIcon name={APP_ICONS.quickActions.createEvent} size={20} color="#CD7353" />
+              </View>
               <Text style={{ color: '#CD7353', fontWeight: '900', fontSize: 16 }}>Crear evento</Text>
             </TouchableOpacity>
             <TouchableOpacity
               activeOpacity={0.86}
-              style={{ backgroundColor: '#ECF3EA', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, marginTop: 10 }}
+              style={{ backgroundColor: '#ECF3EA', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }}
               onPress={showSoon}
             >
-              <Text style={{ color: '#496E47', fontWeight: '900', fontSize: 16 }}>Preguntar a Geni</Text>
+              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(73,110,71,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                <HomePlusIcon name={APP_ICONS.quickActions.geni} size={20} color="#496E47" />
+              </View>
+<Text style={{ color: '#496E47', fontWeight: '900', fontSize: 16 }}>Preguntar a Geni</Text>
             </TouchableOpacity>
-          </Pressable>
+          </Animated.View>
         </Pressable>
       </Modal>
     </View>
@@ -244,16 +314,16 @@ export function HomeTabNavigator() {
         },
       }}
     >
-      {/* 1 – Inicio */}
+{/* 1 – Inicio */}
       <Tab.Screen
         name="HomeTab"
         component={HomeScreen}
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
+              iconKey="home"
               label="Home"
               focused={focused}
-              mark="H"
             />
           ),
         }}
@@ -266,9 +336,9 @@ export function HomeTabNavigator() {
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
+              iconKey="people"
               label="People"
               focused={focused}
-              mark="P"
             />
           ),
         }}
@@ -291,9 +361,9 @@ export function HomeTabNavigator() {
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
+              iconKey="planner"
               label="Planner"
               focused={focused}
-              mark="Pl"
             />
           ),
         }}
@@ -306,9 +376,9 @@ export function HomeTabNavigator() {
         options={{
           tabBarIcon: ({ focused }) => (
             <TabIcon
+              iconKey="more"
               label="More"
               focused={focused}
-              mark="..."
             />
           ),
         }}

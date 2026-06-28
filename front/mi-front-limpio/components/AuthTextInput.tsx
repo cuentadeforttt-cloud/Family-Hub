@@ -20,22 +20,38 @@ type AuthTextInputProps = TextInputProps & {
 export const AuthTextInput = forwardRef<TextInput, AuthTextInputProps>(
   ({ label, error, containerStyle, isPasswordField = false, style, ...props }, ref) => {
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
     const secureTextEntry = isPasswordField ? !isPasswordVisible : props.secureTextEntry;
 
     return (
       <View style={containerStyle}>
         <Text style={styles.label}>{label}</Text>
-        <View style={[styles.inputContainer, error ? styles.inputContainerError : null]}>
+        <View
+          style={[
+            styles.inputContainer,
+            isFocused ? styles.inputContainerFocused : null,
+            error ? styles.inputContainerError : null,
+            props.editable === false ? styles.inputContainerDisabled : null,
+          ]}
+        >
           <TextInput
             ref={ref}
+            {...props}
             style={[styles.input, style]}
-            placeholderTextColor="#A3A3A3"
+            placeholderTextColor="#746D66"
             selectionColor="#CD7353"
             cursorColor="#1C1C1C"
             editable={props.editable}
             importantForAutofill="yes"
             secureTextEntry={secureTextEntry}
-            {...props}
+            onFocus={(event) => {
+              setIsFocused(true);
+              props.onFocus?.(event);
+            }}
+            onBlur={(event) => {
+              setIsFocused(false);
+              props.onBlur?.(event);
+            }}
           />
           {isPasswordField ? (
             <TouchableOpacity
@@ -71,9 +87,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   inputContainer: {
-    backgroundColor: '#F3F2EE',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2DFD6',
+    borderColor: '#E8E3DC',
     borderRadius: 12,
     minHeight: 56,
     paddingLeft: 16,
@@ -82,8 +98,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  inputContainerFocused: {
+    borderColor: '#C17F59',
+    backgroundColor: '#FFFFFF',
+  },
   inputContainerError: {
-    borderColor: '#B6472C',
+    borderColor: '#C46B6B',
+    backgroundColor: '#FFFFFF',
+  },
+  inputContainerDisabled: {
+    backgroundColor: '#F3F0EB',
+    borderColor: '#D8D1C8',
   },
   input: {
     flex: 1,

@@ -2,13 +2,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
+  Keyboard,
+  Pressable,
   Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ApiError } from '../../services/api';
@@ -184,6 +186,10 @@ export function TaskForm({
     navigation.goBack();
   };
 
+  const handlePressOutside = () => {
+    Keyboard.dismiss();
+  };
+
   const submit = async () => {
     if (authLoading) {
       const message = 'Estamos preparando tu sesión. Intentá de nuevo en un momento.';
@@ -286,10 +292,13 @@ export function TaskForm({
       <ActivityIndicator color="#CD7353" />
     </View>
   ) : (
-      <ScrollView
+    <Pressable style={{ flex: 1 }} onPress={handlePressOutside}>
+      <KeyboardAwareScrollView
         style={embedded ? undefined : S.scroll}
         contentContainerStyle={embedded ? { paddingBottom: 26 } : S.content}
         keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={24}
       >
         <View style={[S.headerRow, { marginBottom: 18 }]}>
           <View style={{ flex: 1 }}>
@@ -468,7 +477,8 @@ export function TaskForm({
         >
           <Text style={S.btnText}>{saving ? 'Guardando...' : mode === 'edit' ? 'Guardar cambios' : 'Crear tarea'}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
+    </Pressable>
   );
 
   if (embedded) {

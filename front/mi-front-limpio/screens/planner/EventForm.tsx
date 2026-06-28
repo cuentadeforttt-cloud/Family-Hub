@@ -2,13 +2,15 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
+  Keyboard,
+  Pressable,
   Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { ApiError } from '../../services/api';
@@ -330,15 +332,22 @@ export function EventForm({
     navigation.goBack();
   };
 
+  const handlePressOutside = () => {
+    Keyboard.dismiss();
+  };
+
   const content = loading ? (
     <View style={[S.content, { minHeight: 220, justifyContent: 'center' }]}>
       <ActivityIndicator color="#CD7353" />
     </View>
   ) : (
-      <ScrollView
+    <Pressable style={{ flex: 1 }} onPress={handlePressOutside}>
+      <KeyboardAwareScrollView
         style={embedded ? undefined : S.scroll}
         contentContainerStyle={embedded ? { paddingBottom: 26 } : S.content}
         keyboardShouldPersistTaps="handled"
+        enableOnAndroid={true}
+        extraScrollHeight={24}
       >
         <View style={[S.headerRow, { marginBottom: 18 }]}>
           <View style={{ flex: 1 }}>
@@ -469,7 +478,8 @@ export function EventForm({
             <Text style={S.dangerText}>Cancelar evento</Text>
           </TouchableOpacity>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
+    </Pressable>
   );
 
   if (embedded) {

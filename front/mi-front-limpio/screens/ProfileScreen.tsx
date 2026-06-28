@@ -11,6 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
+import { HomePlusIcon } from '../constants/icons';
+import { colors } from '../constants/theme';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const ROL_DISPLAY: Record<string, string> = {
@@ -126,16 +128,19 @@ export const ProfileScreen = () => {
 
         {/* ── Info cards ──────────────────────────────────────────────── */}
         <View style={S.section}>
-          <InfoRow icon="✉️" label="Email" value={myEmail} />
-          <InfoRow icon="📅" label="Miembro desde" value={memberSince} />
+          <InfoRow icon={<HomePlusIcon name="mail" size={20} color="#888888" />} label="Email" value={myEmail} />
+          <InfoRow icon={<HomePlusIcon name="calendar" size={20} color="#888888" />} label="Miembro desde" value={memberSince} />
           {currentHousehold && (
-            <InfoRow icon="🏠" label="Hogar" value={currentHousehold.nombre} />
+            <InfoRow icon={<HomePlusIcon name="home" size={20} color="#888888" />} label="Hogar" value={currentHousehold.nombre} />
           )}
         </View>
 
         {/* ── Mi familia ──────────────────────────────────────────────── */}
         <View style={S.sectionHeader}>
-          <Text style={S.sectionTitle}>Mi familia</Text>
+          <View style={S.sectionTitleRow}>
+            <HomePlusIcon name="people" size={20} color={accentColor} />
+            <Text style={S.sectionTitle}>Mi familia</Text>
+          </View>
           <Text style={S.sectionCount}>{members.length} miembros</Text>
         </View>
         <View style={S.section}>
@@ -171,11 +176,14 @@ export const ProfileScreen = () => {
 
         {/* ── Configuración ───────────────────────────────────────────── */}
         <View style={S.sectionHeader}>
-          <Text style={S.sectionTitle}>Configuración</Text>
+          <View style={S.sectionTitleRow}>
+            <HomePlusIcon name="settings" size={20} color={accentColor} />
+            <Text style={S.sectionTitle}>Configuración</Text>
+          </View>
         </View>
         <View style={S.section}>
           <View style={S.settingRow}>
-            <Text style={S.settingIcon}>🔔</Text>
+            <HomePlusIcon name="notifications" size={22} color="#888888" />
             <View style={{ flex: 1 }}>
               <Text style={S.settingLabel}>Notificaciones</Text>
               <Text style={S.settingDesc}>Alertas del hogar y eventos</Text>
@@ -188,7 +196,7 @@ export const ProfileScreen = () => {
             />
           </View>
           <View style={[S.settingRow, S.settingRowBorder]}>
-            <Text style={S.settingIcon}>🔒</Text>
+            <HomePlusIcon name="shield-checkmark" size={22} color="#888888" />
             <View style={{ flex: 1 }}>
               <Text style={S.settingLabel}>Privacidad y seguridad</Text>
               <Text style={S.settingDesc}>Datos y contraseña</Text>
@@ -198,7 +206,7 @@ export const ProfileScreen = () => {
             </TouchableOpacity>
           </View>
           <View style={[S.settingRow, S.settingRowBorder]}>
-            <Text style={S.settingIcon}>🎨</Text>
+            <HomePlusIcon name="color-palette" size={22} color="#888888" />
             <View style={{ flex: 1 }}>
               <Text style={S.settingLabel}>Apariencia</Text>
               <Text style={S.settingDesc}>Tema y preferencias</Text>
@@ -213,7 +221,10 @@ export const ProfileScreen = () => {
         {isCoordinator && (
           <>
             <View style={S.sectionHeader}>
-              <Text style={S.sectionTitle}>Área de invitación</Text>
+              <View style={S.sectionTitleRow}>
+                <HomePlusIcon name="person-add" size={20} color={accentColor} />
+                <Text style={S.sectionTitle}>Área de invitación</Text>
+              </View>
             </View>
             <View style={S.section}>
               {/* Admin / Miembros toggle */}
@@ -285,10 +296,10 @@ export const ProfileScreen = () => {
 };
 
 // ─── InfoRow helper ───────────────────────────────────────────────────────────
-function InfoRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <View style={S.infoRow}>
-      <Text style={S.infoIcon}>{icon}</Text>
+      <View style={S.infoIconWrapper}>{icon}</View>
       <View style={{ flex: 1 }}>
         <Text style={S.infoLabel}>{label}</Text>
         <Text style={S.infoValue} numberOfLines={1}>{value}</Text>
@@ -317,6 +328,13 @@ const S = StyleSheet.create({
     borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12,
   },
   grupoChipText: { fontSize: 12, fontWeight: '600', color: '#888888' },
+
+  // Section headers with icons
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
 
   // Avatar section
   avatarSection: { alignItems: 'center', paddingVertical: 24 },
@@ -374,7 +392,9 @@ const S = StyleSheet.create({
     padding: 14, gap: 12,
     borderBottomWidth: 1, borderBottomColor: '#F0EDE8',
   },
-  infoIcon: { fontSize: 20, width: 28, textAlign: 'center' },
+  infoIconWrapper: {
+    width: 28, alignItems: 'center', justifyContent: 'center',
+  },
   infoLabel: { fontSize: 11, color: '#888888', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
   infoValue: { fontSize: 15, color: '#1C1C1C', fontWeight: '500' },
 
@@ -400,7 +420,6 @@ const S = StyleSheet.create({
     padding: 14, gap: 12,
   },
   settingRowBorder: { borderTopWidth: 1, borderTopColor: '#F0EDE8' },
-  settingIcon: { fontSize: 22, width: 28, textAlign: 'center' },
   settingLabel: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
   settingDesc: { fontSize: 12, color: '#888888', marginTop: 1 },
   chevron: { fontSize: 22, color: '#CCCCCC', fontWeight: '600' },

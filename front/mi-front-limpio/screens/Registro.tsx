@@ -1,14 +1,44 @@
 import React, { useRef, useState } from 'react';
 import { Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { AppLogo } from '../components/AppLogo';
 import { AuthScreenLayout } from '../components/AuthScreenLayout';
 import { AuthTextInput } from '../components/AuthTextInput';
 import { useAuth } from '../context/AuthContext';
 import type { AuthStackParamList } from '../navigation/types';
+import { authErrorHaptic, authSuccessHaptic } from '../utils/haptics';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'P01Registro'>;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const getSignupErrorMessage = (message: string) => {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes('already')
+    || normalized.includes('registr')
+    || normalized.includes('existe')
+    || normalized.includes('uso')
+  ) {
+    return 'Este correo ya está en uso.';
+  }
+
+  if (normalized.includes('password') || normalized.includes('contrasena')) {
+    return 'La contraseña necesita al menos 8 caracteres.';
+  }
+
+  if (
+    normalized.includes('network')
+    || normalized.includes('fetch')
+    || normalized.includes('conectar')
+    || normalized.includes('servidor')
+  ) {
+    return 'No pudimos conectarnos. Probá de nuevo en unos segundos.';
+  }
+
+  return 'No pudimos crear tu cuenta. Revisa los datos e intenta nuevamente.';
+};
 
 export const P01Registro = ({ navigation }: Props) => {
   const { signUp } = useAuth();
@@ -45,37 +75,43 @@ export const P01Registro = ({ navigation }: Props) => {
 
     if (!trimmedNombre) {
       setSuccessMessage(null);
-      setErrorMessage('Ingresa tu nombre para crear la cuenta.');
+      void authErrorHaptic();
+      setErrorMessage('Ingresa tu nombre para crear tu cuenta.');
       return;
     }
 
     if (!trimmedEmail) {
       setSuccessMessage(null);
-      setErrorMessage('Ingresa tu email para crear la cuenta.');
+      void authErrorHaptic();
+      setErrorMessage('Ingresa tu correo para crear la cuenta.');
       return;
     }
 
     if (!EMAIL_REGEX.test(trimmedEmail)) {
       setSuccessMessage(null);
-      setErrorMessage('Ingresa un email valido.');
+      void authErrorHaptic();
+      setErrorMessage('Ingresá un correo válido.');
       return;
     }
 
     if (!password.trim()) {
       setSuccessMessage(null);
-      setErrorMessage('Ingresa una contrasena para continuar.');
+      void authErrorHaptic();
+      setErrorMessage('Ingresá una contraseña para continuar.');
       return;
     }
 
     if (password.length < 8) {
       setSuccessMessage(null);
-      setErrorMessage('La contrasena debe tener al menos 8 caracteres.');
+      void authErrorHaptic();
+      setErrorMessage('La contraseña necesita al menos 8 caracteres.');
       return;
     }
 
     if (password !== confirmPassword) {
       setSuccessMessage(null);
-      setErrorMessage('Las contrasenas no coinciden.');
+      void authErrorHaptic();
+      setErrorMessage('Las contraseñas no coinciden.');
       return;
     }
 
@@ -90,14 +126,17 @@ export const P01Registro = ({ navigation }: Props) => {
     });
 
     if (result.error) {
-      setErrorMessage(result.error);
+      void authErrorHaptic();
+      setErrorMessage(getSignupErrorMessage(result.error));
       setLoading(false);
       return;
     }
 
+    void authSuccessHaptic();
+
     if (result.needsEmailConfirmation) {
       setSuccessMessage(
-        'Tu cuenta fue creada. Revisa tu correo para confirmar el acceso antes de iniciar sesion.',
+        'Tu cuenta fue creada. Revisá tu correo para confirmar el acceso antes de iniciar sesión.',
       );
       setPassword('');
       setConfirmPassword('');
@@ -107,12 +146,12 @@ export const P01Registro = ({ navigation }: Props) => {
   };
 
   return (
-    <AuthScreenLayout screenIndicator="01 - REGISTRO">
+    <AuthScreenLayout screenIndicator="01 - REGISTRO" presentation="premium">
       <View style={styles.header}>
-        <Text style={styles.icon}>👤</Text>
-        <Text style={styles.title}>Quien sos?</Text>
+        <AppLogo size={70} rounded style={styles.logo} />
+        <Text style={styles.title}>Crea tu espacio familiar</Text>
         <Text style={styles.subtitle}>
-          Primero lo basico. Despues te presentamos a tu familia.
+          Empeza con tu cuenta y despues vas a poder crear o unirte a un hogar.
         </Text>
       </View>
 
@@ -156,7 +195,7 @@ export const P01Registro = ({ navigation }: Props) => {
 
         <AuthTextInput
           ref={passwordInputRef}
-          label="Contrasena"
+          label="Contraseña"
           placeholder="Minimo 8 caracteres"
           isPasswordField
           autoCapitalize="none"
@@ -176,8 +215,8 @@ export const P01Registro = ({ navigation }: Props) => {
 
         <AuthTextInput
           ref={confirmPasswordInputRef}
-          label="Confirmar contrasena"
-          placeholder="Repite tu contrasena"
+          label="Confirmar contraseña"
+          placeholder="Repetí tu contraseña"
           isPasswordField
           autoCapitalize="none"
           autoCorrect={false}
@@ -204,26 +243,8 @@ export const P01Registro = ({ navigation }: Props) => {
           accessibilityLabel="Crear cuenta"
         >
           <Text style={styles.primaryButtonText}>
-            {loading ? 'Creando cuenta...' : 'Continuar con email'}
+            {loading ? 'Creando cuenta...' : 'Crear cuenta'}
           </Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerContainer}>
-          <View style={styles.line} />
-          <Text style={styles.circle}>o</Text>
-          <View style={styles.line} />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.googleButton, loading && styles.buttonDisabled]}
-          onPress={() =>
-            setErrorMessage('El ingreso con Google quedara para una fase posterior del MVP.')
-          }
-          disabled={loading}
-          accessibilityRole="button"
-          accessibilityLabel="Continuar con Google proximamente"
-        >
-          <Text style={styles.googleButtonText}>Continuar con Google (proximamente)</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -233,7 +254,7 @@ export const P01Registro = ({ navigation }: Props) => {
           accessibilityRole="button"
           accessibilityLabel="Ir a login"
         >
-          <Text style={styles.linkText}>Ya tienes cuenta? Inicia sesion</Text>
+          <Text style={styles.linkText}>¿Ya tenés cuenta? Iniciá sesión</Text>
         </TouchableOpacity>
       </View>
     </AuthScreenLayout>
@@ -241,15 +262,33 @@ export const P01Registro = ({ navigation }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  header: { alignItems: 'center', marginBottom: 32 },
-  icon: { fontSize: 60, marginBottom: 16 },
-  title: { fontSize: 26, fontWeight: '700', color: '#1C1C1C', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#6B6B6B', textAlign: 'center', paddingHorizontal: 20 },
+  header: { alignItems: 'center', marginBottom: 30 },
+  logo: { marginBottom: 18 },
+  title: { fontSize: 27, fontWeight: '700', color: '#1A1714', marginBottom: 8, textAlign: 'center' },
+  subtitle: { fontSize: 15, color: '#6B6560', textAlign: 'center', lineHeight: 22 },
   form: { width: '100%' },
-  errorText: { color: '#B6472C', fontSize: 13, marginBottom: 12, lineHeight: 18 },
-  successText: { color: '#2F6E4F', fontSize: 13, marginBottom: 12, lineHeight: 18 },
+  errorText: {
+    color: '#A85050',
+    fontSize: 13,
+    marginBottom: 12,
+    lineHeight: 18,
+    backgroundColor: '#F5E2E2',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  successText: {
+    color: '#558563',
+    fontSize: 13,
+    marginBottom: 12,
+    lineHeight: 18,
+    backgroundColor: '#E1EFE5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   primaryButton: {
-    backgroundColor: '#CD7353',
+    backgroundColor: '#C17F59',
     width: '100%',
     paddingVertical: 16,
     borderRadius: 12,
@@ -258,19 +297,6 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
   buttonDisabled: { opacity: 0.6 },
-  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
-  line: { flex: 1, height: 1, backgroundColor: '#E2DFD6' },
-  circle: { marginHorizontal: 16, color: '#A3A3A3', fontSize: 12 },
-  googleButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2DFD6',
-    width: '100%',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  googleButtonText: { color: '#1C1C1C', fontSize: 15, fontWeight: '600' },
   linkButton: { marginTop: 24, alignItems: 'center' },
-  linkText: { color: '#CD7353', fontSize: 14, fontWeight: '600' },
+  linkText: { color: '#A86B45', fontSize: 14, fontWeight: '700', textAlign: 'center' },
 });

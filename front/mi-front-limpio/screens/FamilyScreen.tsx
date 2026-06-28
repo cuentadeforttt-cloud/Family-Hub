@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 
 import { ActionPill, AppButton, AppCard, AppScreen, AppText, EmptyState, ErrorState, Skeleton } from '../components/ui';
 import { colors, radius, spacing } from '../constants/theme';
+import { HomePlusIcon } from '../constants/icons';
 import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { finalizeHouseholdMember, type JoinRequest } from '../services/api';
@@ -226,24 +227,30 @@ export const FamilyScreen = () => {
         </View>
       </AppCard>
 
-      {isCoordinator ? (
+{isCoordinator ? (
         <AppCard variant="quiet" padding="default">
           <View style={styles.inviteRow}>
-            <View style={{ flex: 1 }}>
-              <AppText variant="title3">Invitaciones</AppText>
-              <AppText variant="bodySmall" tone="secondary">
-                Genera links reales y aproba solicitudes del hogar.
-              </AppText>
+            <View style={styles.inviteLabel}>
+              <HomePlusIcon name="person-add" size={20} color={colors.terracotta[600]} />
+              <View style={{ flex: 1 }}>
+                <AppText variant="title3">Invitaciones</AppText>
+                <AppText variant="bodySmall" tone="secondary">
+                  Genera links reales y aproba solicitudes del hogar.
+                </AppText>
+              </View>
             </View>
             <AppButton title="Invitar" size="sm" onPress={handleInvite} disabled={!currentHousehold?.id} />
           </View>
         </AppCard>
       ) : null}
 
-      {isCoordinator ? (
+{isCoordinator ? (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <AppText variant="title3">Solicitudes pendientes</AppText>
+            <View style={styles.sectionTitleRow}>
+              <HomePlusIcon name="person-add" size={20} color={colors.terracotta[600]} />
+              <AppText variant="title3">Solicitudes pendientes</AppText>
+            </View>
             <AppButton
               title="Actualizar"
               variant="ghost"
@@ -322,9 +329,12 @@ export const FamilyScreen = () => {
         </View>
       ) : null}
 
-      <View style={styles.section}>
+<View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <AppText variant="title3">Miembros</AppText>
+          <View style={styles.sectionTitleRow}>
+            <HomePlusIcon name="people" size={20} color={colors.terracotta[600]} />
+            <AppText variant="title3">Miembros</AppText>
+          </View>
           {(loading || reloading) ? <ActionPill label="Actualizando" tone="primary" disabled /> : null}
         </View>
 
@@ -339,7 +349,7 @@ export const FamilyScreen = () => {
           />
         ) : (
           <View style={styles.stack}>
-            {members.map((member) => {
+{members.map((member) => {
               const displayName = member.user?.nombre ?? 'Miembro';
               const roleLabel = ROLE_LABELS[member.rol] ?? member.rol;
               const isSelf = activeMembership?.id === member.id;
@@ -360,9 +370,12 @@ export const FamilyScreen = () => {
                         </AppText>
                         {isSelf ? <ActionPill label="Vos" tone="success" disabled /> : null}
                       </View>
-                      <AppText variant="bodySmall" tone="secondary">
-                        {roleLabel}
-                      </AppText>
+                      <View style={styles.memberMetaRow}>
+                        <HomePlusIcon name="ribbon" size={14} color={colors.text.tertiary} />
+                        <AppText variant="bodySmall" tone="secondary">
+                          {roleLabel}
+                        </AppText>
+                      </View>
                     </View>
                     {canRemove ? (
                       <AppButton
@@ -413,6 +426,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[3],
   },
+  inviteLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[3],
+    flex: 1,
+  },
   section: {
     gap: spacing[3],
   },
@@ -421,6 +440,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing[3],
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
   },
   stack: {
     gap: spacing[3],
@@ -447,6 +471,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacing[2],
+  },
+  memberMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[1],
+    marginTop: spacing[1],
   },
   avatar: {
     width: 48,
