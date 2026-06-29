@@ -26,6 +26,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useAppRefresh } from '../../context/AppRefreshContext';
 import { buildLocalIso, dateToYMD, plannerStyles as S, recurrenceLabels } from './plannerShared';
+import { colors } from '../../constants/theme';
 
 type EventFormProps = {
   mode: 'create' | 'edit';
@@ -175,17 +176,17 @@ export function EventForm({
     }
 
     if (!title.trim()) {
-      Alert.alert('Planner', 'El titulo es obligatorio.');
+      Alert.alert('Planner', 'Agregá un título para el evento.');
       return;
     }
 
     if (mode === 'edit' && isGeneratedRecurringOccurrence) {
       if (editScope === 'occurrence' && (!baseEventId || !occurrenceStartsAt)) {
-        Alert.alert('Planner', 'No hay informacion suficiente para editar este evento recurrente.');
+        Alert.alert('Planner', 'No hay información suficiente para editar este evento recurrente.');
         return;
       }
       if (editScope === 'series' && !baseEventId) {
-        Alert.alert('Planner', 'No hay informacion suficiente para editar este evento recurrente.');
+        Alert.alert('Planner', 'No hay información suficiente para editar este evento recurrente.');
         return;
       }
     }
@@ -230,31 +231,31 @@ export function EventForm({
       if (mode === 'edit' && eventId) {
         let targetEventId = eventId;
 
-        if (isGeneratedRecurringOccurrence) {
-          if (editScope === 'occurrence') {
-            if (!baseEventId || !occurrenceStartsAt) {
-              const message = 'No hay informacion suficiente para editar este evento recurrente.';
-              setError(message);
-              Alert.alert('Planner', message);
-              return;
-            }
+if (isGeneratedRecurringOccurrence) {
+            if (editScope === 'occurrence') {
+              if (!baseEventId || !occurrenceStartsAt) {
+                const message = 'No hay información suficiente para editar este evento recurrente.';
+                setError(message);
+                Alert.alert('Planner', message);
+                return;
+              }
 
-            const overrideResponse = await createEventOccurrenceOverride(accessToken, baseEventId, {
-              original_occurrence_start_at: occurrenceStartsAt,
-              starts_at: occurrenceStartsAt,
-              ends_at: occurrenceEndsAt ?? undefined,
-            });
-            targetEventId = overrideResponse.event.id;
-          } else if (editScope === 'series') {
-            if (!baseEventId) {
-              const message = 'No hay informacion suficiente para editar este evento recurrente.';
-              setError(message);
-              Alert.alert('Planner', message);
-              return;
+              const overrideResponse = await createEventOccurrenceOverride(accessToken, baseEventId, {
+                original_occurrence_start_at: occurrenceStartsAt,
+                starts_at: occurrenceStartsAt,
+                ends_at: occurrenceEndsAt ?? undefined,
+              });
+              targetEventId = overrideResponse.event.id;
+            } else if (editScope === 'series') {
+              if (!baseEventId) {
+                const message = 'No hay información suficiente para editar este evento recurrente.';
+                setError(message);
+                Alert.alert('Planner', message);
+                return;
+              }
+              targetEventId = baseEventId;
             }
-            targetEventId = baseEventId;
           }
-        }
 
         await updatePlannerEvent(accessToken, targetEventId, payload);
         markPlannerChanged();
@@ -297,7 +298,7 @@ export function EventForm({
   const cancelEvent = () => {
     if (!accessToken || !eventId) return;
 
-    Alert.alert('¿Cancelar este evento?', 'Dejara de aparecer como proximo evento.', [
+    Alert.alert('¿Cancelar este evento?', 'Dejará de aparecer como próximo evento.', [
       { text: 'Volver', style: 'cancel' },
       {
         text: 'Cancelar evento',
@@ -347,12 +348,16 @@ export function EventForm({
         contentContainerStyle={embedded ? { paddingBottom: 26 } : S.content}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
-        extraScrollHeight={24}
+        extraScrollHeight={48}
       >
         <View style={[S.headerRow, { marginBottom: 18 }]}>
           <View style={{ flex: 1 }}>
-            <Text style={S.title}>{mode === 'edit' ? 'Editar evento' : 'Nuevo evento'}</Text>
-            <Text style={S.subtitle}>Recurrencia simple y agenda compartida del hogar.</Text>
+            <Text style={S.title}>{mode === 'edit' ? 'Editar evento' : 'Crear evento'}</Text>
+            <Text style={S.subtitle}>
+              {mode === 'edit'
+                ? 'Ajustá los detalles sin perder la coordinación familiar.'
+                : 'Agendá un momento importante para que todos estén al tanto.'}
+            </Text>
           </View>
           <TouchableOpacity style={S.secondaryBtn} onPress={closeForm}>
             <Text style={S.secondaryText}>Cerrar</Text>
@@ -366,22 +371,21 @@ export function EventForm({
         ) : null}
 
         {mode === 'edit' && isGeneratedRecurringOccurrence ? (
-          <View style={[S.card, { marginBottom: 18, padding: 12 }]}>
-            <Text style={[S.label, { marginBottom: 8 }]}>Alcance de la edicion</Text>
+          <View style={S.eventScopeCard}>
+            <Text style={S.formLabelHuman}>Alcance de la edición</Text>
             <View style={[S.row, { gap: 8 }]}>
               <TouchableOpacity
                 style={[
-                  S.chip,
-                  editScope === 'occurrence' && S.chipActive,
+                  S.eventFormChip,
+                  editScope === 'occurrence' && S.eventFormChipActive,
                   { flex: 1, alignItems: 'center', paddingVertical: 10 },
                 ]}
                 onPress={() => setEditScope('occurrence')}
               >
                 <Text
                   style={[
-                    S.chipText,
-                    editScope === 'occurrence' && S.chipTextActive,
-                    { fontSize: 13 },
+                    S.eventFormChipText,
+                    editScope === 'occurrence' && S.eventFormChipTextActive,
                   ]}
                 >
                   Solo este evento
@@ -389,89 +393,146 @@ export function EventForm({
               </TouchableOpacity>
               <TouchableOpacity
                 style={[
-                  S.chip,
-                  editScope === 'series' && S.chipActive,
+                  S.eventFormChip,
+                  editScope === 'series' && S.eventFormChipActive,
                   { flex: 1, alignItems: 'center', paddingVertical: 10 },
                 ]}
                 onPress={() => setEditScope('series')}
               >
                 <Text
                   style={[
-                    S.chipText,
-                    editScope === 'series' && S.chipTextActive,
-                    { fontSize: 13 },
+                    S.eventFormChipText,
+                    editScope === 'series' && S.eventFormChipTextActive,
                   ]}
                 >
                   Toda la serie
                 </Text>
               </TouchableOpacity>
             </View>
+            <Text style={S.eventScopeHelper}>
+              Elegí si este cambio afecta solo esta fecha o toda la serie.
+            </Text>
           </View>
         ) : null}
 
-        <Text style={S.label}>Titulo</Text>
-        <TextInput style={S.input} value={title} onChangeText={setTitle} placeholder="Ej. Control medico" />
+        <View style={S.eventFormSection}>
+            <Text style={S.formLabelHuman}>¿Qué evento es?</Text>
+            <TextInput
+              style={[S.eventFormInput, S.eventFormInputFocus]}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Ej. Control médico, Cumpleaños de Ana..."
+              placeholderTextColor={colors.text.tertiary}
+            />
+          </View>
 
-        <Text style={S.label}>Descripcion</Text>
-        <TextInput
-          style={[S.input, S.textArea]}
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Notas del evento"
-          multiline
-        />
+          <View style={S.eventFormSection}>
+            <Text style={S.formLabelHuman}>Descripción</Text>
+            <TextInput
+              style={[S.eventFormInput, S.textArea, S.eventFormInputFocus]}
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Notas adicionales del evento..."
+              placeholderTextColor={colors.text.tertiary}
+              multiline
+            />
+          </View>
 
-        <Text style={S.label}>Fecha</Text>
-        <TextInput style={S.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
+          <View style={S.eventFormSection}>
+            <Text style={S.formLabelHuman}>Fecha</Text>
+            <TextInput
+              style={[S.eventFormInput, S.eventFormInputFocus]}
+              value={date}
+              onChangeText={setDate}
+              placeholder="2024-06-15"
+              placeholderTextColor={colors.text.tertiary}
+            />
+            <Text style={S.formHelperText}>Usá el formato AAAA-MM-DD.</Text>
+          </View>
 
-        <View style={[S.card, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
-          <Text style={{ color: '#17201A', fontWeight: '800', fontSize: 15 }}>Todo el dia</Text>
-          <Switch value={allDay} onValueChange={setAllDay} />
-        </View>
+          <View style={S.allDayCompactCard}>
+            <Text style={S.allDayLabel}>Todo el día</Text>
+            <Switch value={allDay} onValueChange={setAllDay} />
+          </View>
 
-        {!allDay ? (
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={S.label}>Inicio</Text>
-              <TextInput style={S.input} value={startTime} onChangeText={setStartTime} placeholder="HH:mm" />
+          {!allDay ? (
+            <View style={S.eventFormSection}>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={S.formLabelHuman}>Hora de inicio</Text>
+                  <TextInput
+                    style={[S.eventFormInput, S.eventFormInputFocus]}
+                    value={startTime}
+                    onChangeText={setStartTime}
+                    placeholder="09:00"
+                    placeholderTextColor={colors.text.tertiary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={S.formLabelHuman}>Hora de fin</Text>
+                  <TextInput
+                    style={[S.eventFormInput, S.eventFormInputFocus]}
+                    value={endTime}
+                    onChangeText={setEndTime}
+                    placeholder="18:30"
+                    placeholderTextColor={colors.text.tertiary}
+                  />
+                </View>
+              </View>
+              <Text style={S.formHelperText}>Usá formato 24hs, ej. 14:30.</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={S.label}>Fin</Text>
-              <TextInput style={S.input} value={endTime} onChangeText={setEndTime} placeholder="HH:mm" />
+          ) : null}
+
+          <View style={S.eventFormSection}>
+            <Text style={S.formLabelHuman}>Lugar</Text>
+            <TextInput
+              style={[S.eventFormInput, S.eventFormInputFocus]}
+              value={locationName}
+              onChangeText={setLocationName}
+              placeholder="Ej. Sanatorio Güemes, Casa de María..."
+              placeholderTextColor={colors.text.tertiary}
+            />
+          </View>
+
+        <View style={S.eventFormSection}>
+            <Text style={S.formLabelHuman}>Repetición</Text>
+            <View style={[S.row, { marginBottom: 0 }]}>
+              {recurrenceOptions.map((item) => {
+                const active = recurrence === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[S.eventFormChip, active && S.eventFormChipActive]}
+                    onPress={() => setRecurrence(item)}
+                  >
+                    <Text style={[S.eventFormChipText, active && S.eventFormChipTextActive]}>
+                      {recurrenceLabels[item]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
-        ) : null}
-
-        <Text style={S.label}>Ubicacion</Text>
-        <TextInput style={S.input} value={locationName} onChangeText={setLocationName} placeholder="Ej. Sanatorio" />
-
-        <Text style={S.label}>Recurrencia</Text>
-        <View style={[S.row, { marginBottom: 18 }]}>
-          {recurrenceOptions.map((item) => {
-            const active = recurrence === item;
-            return (
-              <TouchableOpacity
-                key={item}
-                style={[S.chip, active && S.chipActive]}
-                onPress={() => setRecurrence(item)}
-              >
-                <Text style={[S.chipText, active && S.chipTextActive]}>{recurrenceLabels[item]}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
 
         <TouchableOpacity
           style={[S.primaryBtn, saving && { opacity: 0.6 }]}
           onPress={() => void submit()}
           disabled={saving || loading || authLoading || !isFormReadyForSubmit}
         >
-          <Text style={S.btnText}>{saving ? 'Guardando...' : mode === 'edit' ? 'Guardar cambios' : 'Crear evento'}</Text>
+          <Text style={S.btnText}>
+            {saving
+              ? mode === 'edit'
+                ? 'Guardando...'
+                : 'Creando evento...'
+              : mode === 'edit'
+              ? 'Guardar cambios'
+              : 'Crear evento'}
+          </Text>
         </TouchableOpacity>
 
         {mode === 'edit' ? (
           <TouchableOpacity
-            style={[S.dangerBtn, { marginTop: 10 }, saving && { opacity: 0.6 }]}
+            style={[S.dangerBtn, { marginTop: 12 }, saving && { opacity: 0.6 }]}
             onPress={cancelEvent}
             disabled={saving}
           >

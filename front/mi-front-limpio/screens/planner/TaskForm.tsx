@@ -13,6 +13,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { StyleSheet } from 'react-native';
 import { ApiError } from '../../services/api';
 import {
   createPlannerTask,
@@ -27,7 +28,8 @@ import { OTHER_PLANNER_TEMPLATE, PLANNER_TASK_TEMPLATES } from '../../services/p
 import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
 import { useAppRefresh } from '../../context/AppRefreshContext';
-import { addDays, dateToYMD, plannerStyles as S, priorityLabels } from './plannerShared';
+import { addDays, dateToYMD, plannerStyles as S, priorityLabels, formatDate } from './plannerShared';
+import { colors } from '../../constants/theme';
 
 type TaskFormProps = {
   mode: 'create' | 'edit';
@@ -83,6 +85,7 @@ export function TaskForm({
   const [assignedMemberId, setAssignedMemberId] = useState('');
   const [requiresVerification, setRequiresVerification] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [inputFocus, setInputFocus] = useState<string | null>(null);
 
   const activeMembers = useMemo(() => members, [members]);
   const myMembershipId = useMemo(() => {
@@ -213,7 +216,7 @@ export function TaskForm({
     }
 
     if (!title.trim()) {
-      Alert.alert('Planner', 'El titulo es obligatorio.');
+      setError('Agregá un título para la tarea.');
       return;
     }
 
@@ -251,18 +254,20 @@ export function TaskForm({
       if (mode === 'edit' && taskId) {
         await updatePlannerTask(accessToken, taskId, payload);
         markPlannerChanged();
+        const successMsg = 'Tarea actualizada.';
         if (onSaved) {
-          onSaved('Tarea actualizada.');
+          onSaved(successMsg);
         } else {
-          Alert.alert('Planner', 'Tarea actualizada.');
+          Alert.alert('Planner', successMsg);
         }
       } else {
         await createPlannerTask(accessToken, payload);
         markPlannerChanged();
+        const successMsg = 'Tarea creada.';
         if (onSaved) {
-          onSaved('Tarea creada.');
+          onSaved(successMsg);
         } else {
-          Alert.alert('Planner', 'Tarea creada.');
+          Alert.alert('Planner', successMsg);
         }
       }
 
@@ -270,7 +275,7 @@ export function TaskForm({
         navigation.navigate('PlannerHome', { refreshKey: Date.now() });
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'No pudimos guardar la tarea.';
+      const message = err instanceof ApiError ? err.message : 'No pudimos guardar la tarea. Probá de nuevo.';
       setError(message);
       Alert.alert('Planner', message);
 
@@ -298,71 +303,84 @@ export function TaskForm({
         contentContainerStyle={embedded ? { paddingBottom: 26 } : S.content}
         keyboardShouldPersistTaps="handled"
         enableOnAndroid={true}
-        extraScrollHeight={24}
+        extraScrollHeight={48}
       >
         <View style={[S.headerRow, { marginBottom: 18 }]}>
           <View style={{ flex: 1 }}>
-            <Text style={S.title}>{mode === 'edit' ? 'Editar tarea' : 'Nueva tarea'}</Text>
-            <Text style={S.subtitle}>Los cambios se guardan en el hogar activo.</Text>
+            <Text style={S.title}>{mode === 'edit' ? 'Editar tarea' : 'Crear tarea'}</Text>
+            <Text style={S.subtitle}>
+              {mode === 'edit'
+                ? 'Ajustá los detalles sin perder el seguimiento.'
+                : 'Sumá una responsabilidad para que la casa avance sin confusiones.'}
+            </Text>
           </View>
           <TouchableOpacity style={S.secondaryBtn} onPress={closeForm}>
             <Text style={S.secondaryText}>Cerrar</Text>
           </TouchableOpacity>
         </View>
 
-        {error ? (
-          <View style={S.errorBox}>
-            <Text style={S.errorText}>{error}</Text>
-          </View>
-        ) : null}
+{error ? (
+        <View style={S.errorBox}>
+          <Text style={S.errorText}>{error}</Text>
+        </View>
+      ) : null}
 
-        <Text style={S.label}>Responsabilidad</Text>
+        <Text style={S.formLabelHuman}>¿Qué hay que hacer?</Text>
         <View style={[S.row, { marginBottom: 12 }]}>
           {PLANNER_TASK_TEMPLATES.map((template) => {
             const active = templateKey === template.key;
             return (
               <TouchableOpacity
                 key={template.key}
-                style={[S.chip, active && S.chipActive]}
+                style={[S.taskFormChip, active && S.taskFormChipActive]}
                 onPress={() => selectTemplate(template.key)}
               >
-                <Text style={[S.chipText, active && S.chipTextActive]}>{template.label}</Text>
+                <Text style={[S.taskFormChipText, active && S.taskFormChipTextActive]}>{template.label}</Text>
               </TouchableOpacity>
             );
           })}
           <TouchableOpacity
-            style={[S.chip, templateKey === OTHER_PLANNER_TEMPLATE.key && S.chipActive]}
+            style={[S.taskFormChip, templateKey === OTHER_PLANNER_TEMPLATE.key && S.taskFormChipActive]}
             onPress={() => selectTemplate('other')}
           >
-            <Text style={[S.chipText, templateKey === 'other' && S.chipTextActive]}>Otro</Text>
+            <Text style={[S.taskFormChipText, templateKey === 'other' && S.taskFormChipTextActive]}>Otro</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={S.label}>Titulo</Text>
         <TextInput
-          style={S.input}
+          style={[
+            S.formInputFocused,
+            inputFocus === 'title' && S.formInputFocusedFocus,
+            error && !title.trim() && { borderColor: colors.danger.base },
+          ]}
           value={title}
           onChangeText={(value) => {
             setTitle(value);
             setTitleTouched(true);
+            if (error && !titleTouched) setError(null);
           }}
+          onFocus={() => setInputFocus('title')}
+          onBlur={() => setInputFocus(null)}
           placeholder="Ej. Comprar leche"
         />
+        {!title.trim() && titleTouched ? (
+          <Text style={S.formErrorInline}>Agregá un título para la tarea.</Text>
+        ) : null}
 
-        <Text style={S.label}>Responsable</Text>
+        <Text style={S.formLabelHuman}>Responsable</Text>
         <View style={[S.row, { marginBottom: 12 }]}>
           <TouchableOpacity
-            style={[S.chip, !assignedMemberId && S.chipActive]}
+            style={[S.taskFormChip, !assignedMemberId && S.taskFormChipActive]}
             onPress={() => setAssignedMemberId('')}
           >
-            <Text style={[S.chipText, !assignedMemberId && S.chipTextActive]}>Sin asignar</Text>
+            <Text style={[S.taskFormChipText, !assignedMemberId && S.taskFormChipTextActive]}>Sin asignar</Text>
           </TouchableOpacity>
           {myMembershipId ? (
             <TouchableOpacity
-              style={[S.chip, assignedMemberId === myMembershipId && S.chipActive]}
+              style={[S.taskFormChip, assignedMemberId === myMembershipId && S.taskFormChipActive]}
               onPress={() => setAssignedMemberId(myMembershipId)}
             >
-              <Text style={[S.chipText, assignedMemberId === myMembershipId && S.chipTextActive]}>Yo</Text>
+              <Text style={[S.taskFormChipText, assignedMemberId === myMembershipId && S.taskFormChipTextActive]}>Yo</Text>
             </TouchableOpacity>
           ) : null}
           {activeMembers
@@ -372,16 +390,16 @@ export function TaskForm({
             return (
               <TouchableOpacity
                 key={member.id}
-                style={[S.chip, active && S.chipActive]}
+                style={[S.taskFormChip, active && S.taskFormChipActive]}
                 onPress={() => setAssignedMemberId(member.id)}
               >
-                <Text style={[S.chipText, active && S.chipTextActive]}>{getMemberName(member)}</Text>
+                <Text style={[S.taskFormChipText, active && S.taskFormChipTextActive]}>{getMemberName(member)}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        <Text style={S.label}>Fecha rapida</Text>
+        <Text style={S.formLabelHuman}>¿Para cuándo?</Text>
         <View style={[S.row, { marginBottom: 12 }]}>
           {[
             ['today', 'Hoy'],
@@ -392,90 +410,148 @@ export function TaskForm({
           ].map(([key, label]) => {
             const active = quickDate === key;
             return (
-              <TouchableOpacity key={key} style={[S.chip, active && S.chipActive]} onPress={() => selectQuickDate(key)}>
-                <Text style={[S.chipText, active && S.chipTextActive]}>{label}</Text>
+              <TouchableOpacity key={key} style={[S.taskFormChip, active && S.taskFormChipActive]} onPress={() => selectQuickDate(key)}>
+                <Text style={[S.taskFormChipText, active && S.taskFormChipTextActive]}>{label}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        <Text style={S.label}>Prioridad</Text>
+        <Text style={S.formLabelHuman}>Prioridad</Text>
         <View style={[S.row, { marginBottom: 12 }]}>
           {priorityOptions.map((item) => {
             const active = priority === item;
+            const priorityChipStyle =
+              item === 'low'
+                ? S.taskFormChipPriorityLow
+                : item === 'medium'
+                ? S.taskFormChipPriorityNormal
+                : S.taskFormChipPriorityHigh;
+            const priorityChipActiveStyle =
+              item === 'low'
+                ? S.taskFormChipPriorityLowActive
+                : item === 'medium'
+                ? S.taskFormChipPriorityNormalActive
+                : S.taskFormChipPriorityHighActive;
+            const priorityChipTextStyle =
+              item === 'low'
+                ? S.taskFormChipPriorityLowText
+                : item === 'medium'
+                ? S.taskFormChipPriorityNormalText
+                : S.taskFormChipPriorityHighText;
+            const priorityChipTextActiveStyle =
+              item === 'low'
+                ? S.taskFormChipPriorityLowTextActive
+                : item === 'medium'
+                ? S.taskFormChipPriorityNormalTextActive
+                : S.taskFormChipPriorityHighTextActive;
             return (
               <TouchableOpacity
                 key={item}
-                style={[S.chip, active && S.chipActive]}
+                style={[S.taskFormChip, priorityChipStyle, active && priorityChipActiveStyle]}
                 onPress={() => setPriority(item)}
               >
-                <Text style={[S.chipText, active && S.chipTextActive]}>{priorityLabels[item]}</Text>
+                <Text style={[priorityChipTextStyle, active && priorityChipTextActiveStyle]}>{priorityLabels[item]}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        <View style={[S.card, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
+        <View style={[S.verificationCompactCard]}>
           <View style={{ flex: 1, marginRight: 12 }}>
-            <Text style={{ color: '#17201A', fontWeight: '800', fontSize: 15 }}>Requiere verificacion</Text>
-            <Text style={S.muted}>
-              {requiresVerification
-                ? 'Al completar, queda pendiente hasta que otro miembro la verifique.'
-                : 'Si esta apagado, la tarea se completa directamente.'}
+            <Text style={S.verificationTitle}>Pedir revisión</Text>
+            <Text style={S.verificationHelper}>
+              Útil para tareas que otra persona tiene que confirmar.
+            </Text>
+            <Text style={S.verificationStatus}>
+              {requiresVerification ? 'Con revisión' : 'Sin revisión'}
             </Text>
           </View>
-          <Switch value={requiresVerification} onValueChange={setRequiresVerification} />
+          <Switch
+            value={requiresVerification}
+            onValueChange={setRequiresVerification}
+            trackColor={{ false: colors.border.default, true: colors.terracotta[100] }}
+            thumbColor={requiresVerification ? colors.terracotta[500] : colors.surface.card}
+          />
         </View>
 
         <TouchableOpacity style={S.secondaryBtn} onPress={() => setShowMore((value) => !value)}>
-          <Text style={S.secondaryText}>{showMore ? 'Ocultar opciones' : 'Mas opciones'}</Text>
+          <Text style={S.secondaryText}>{showMore ? 'Ocultar detalles' : 'Agregar detalles'}</Text>
         </TouchableOpacity>
 
         {showMore ? (
           <View style={{ marginTop: 14 }}>
-            <Text style={S.label}>Descripcion</Text>
+            <Text style={S.formLabelHuman}>Detalles</Text>
             <TextInput
-              style={[S.input, S.textArea]}
+              style={[S.formInputFocused, inputFocus === 'description' && S.formInputFocusedFocus]}
               value={description}
               onChangeText={setDescription}
+              onFocus={() => setInputFocus('description')}
+              onBlur={() => setInputFocus(null)}
               placeholder="Notas para el hogar"
               multiline
             />
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text style={S.label}>Fecha exacta</Text>
+                <Text style={S.formLabelHuman}>Fecha exacta</Text>
                 <TextInput
-                  style={S.input}
+                  style={[S.formInputFocused, inputFocus === 'dueDate' && S.formInputFocusedFocus]}
                   value={dueDate}
                   onChangeText={(value) => {
                     setDueDate(value);
                     setQuickDate(value ? 'custom' : 'none');
                   }}
-                  placeholder="YYYY-MM-DD"
+                  onFocus={() => setInputFocus('dueDate')}
+                  onBlur={() => setInputFocus(null)}
+                  placeholder="2025-06-30"
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={S.label}>Hora</Text>
-                <TextInput style={S.input} value={dueTime} onChangeText={setDueTime} placeholder="HH:mm" />
+                <Text style={S.formLabelHuman}>Hora</Text>
+                <TextInput
+                  style={[S.formInputFocused, inputFocus === 'dueTime' && S.formInputFocusedFocus]}
+                  value={dueTime}
+                  onChangeText={setDueTime}
+                  onFocus={() => setInputFocus('dueTime')}
+                  onBlur={() => setInputFocus(null)}
+                  placeholder="14:30"
+                />
               </View>
             </View>
 
             {templateKey === 'other' ? (
               <>
-                <Text style={S.label}>Categoria libre</Text>
-                <TextInput style={S.input} value={category} onChangeText={setCategory} placeholder="Ej. Jardin" />
+                <Text style={S.formLabelHuman}>Categoría</Text>
+                <TextInput
+                  style={[S.formInputFocused, inputFocus === 'category' && S.formInputFocusedFocus]}
+                  value={category}
+                  onChangeText={setCategory}
+                  onFocus={() => setInputFocus('category')}
+                  onBlur={() => setInputFocus(null)}
+                  placeholder="Ej. Jardín"
+                />
               </>
             ) : null}
           </View>
         ) : null}
 
         <TouchableOpacity
-          style={[S.primaryBtn, { marginTop: 16 }, saving && { opacity: 0.6 }]}
+          style={[
+            S.primaryBtn,
+            { marginTop: 16 },
+            (!isFormReadyForSubmit || saving) && { opacity: 0.6 },
+          ]}
           onPress={() => void submit()}
           disabled={saving || loading || authLoading || !isFormReadyForSubmit}
         >
-          <Text style={S.btnText}>{saving ? 'Guardando...' : mode === 'edit' ? 'Guardar cambios' : 'Crear tarea'}</Text>
+          <Text style={S.btnText}>
+            {saving
+              ? (mode === 'edit' ? 'Guardando...' : 'Creando tarea...')
+              : mode === 'edit'
+              ? 'Guardar cambios'
+              : 'Crear tarea'}
+          </Text>
         </TouchableOpacity>
       </KeyboardAwareScrollView>
     </Pressable>

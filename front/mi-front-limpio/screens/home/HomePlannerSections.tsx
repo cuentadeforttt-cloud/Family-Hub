@@ -93,7 +93,7 @@ function BriefingCard({ summary }: { summary: PlannerSummary | null }) {
         <AppText variant="micro" tone="warning" weight="700" style={styles.cardLabelSmall}>Geni · resumen del hogar</AppText>
       </View>
       <AppText variant="bodySmall" tone="secondary" style={styles.briefingText}>{text}</AppText>
-      <AppText variant="caption" tone="tertiary" style={styles.demoLabel}>Resumen automático · demo</AppText>
+      <AppText variant="caption" tone="tertiary" style={styles.demoLabel}>Basado en tus tareas y eventos</AppText>
       <TouchableOpacity style={styles.briefingCta} accessibilityRole="button">
         <AppText variant="caption" tone="warning" weight="700">Chatear con Geni</AppText>
       </TouchableOpacity>

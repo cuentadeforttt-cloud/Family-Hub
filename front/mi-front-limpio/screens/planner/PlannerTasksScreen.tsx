@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { ApiError } from '../../services/api';
 import {
   cancelPlannerTask,
@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useHousehold } from '../../context/HouseholdContext';
 import { useAppRefresh } from '../../context/AppRefreshContext';
 import { dateToYMD, formatDate, formatTime, plannerStyles as S, priorityLabels, statusLabels } from './plannerShared';
+import { lightHaptic } from '../../utils/haptics';
 
 type Props = {
   refreshKey?: number;
@@ -25,7 +26,7 @@ type FilterKey = 'open' | 'mine' | 'family' | 'today' | 'overdue' | 'awaiting' |
 
 const filters: Array<{ key: FilterKey; label: string }> = [
   { key: 'open', label: 'Pendientes' },
-  { key: 'mine', label: 'Mias' },
+  { key: 'mine', label: 'Mías' },
   { key: 'family', label: 'Familia' },
   { key: 'today', label: 'Hoy' },
   { key: 'overdue', label: 'Vencidas' },
@@ -33,6 +34,214 @@ const filters: Array<{ key: FilterKey; label: string }> = [
   { key: 'done', label: 'Hechas' },
   { key: 'cancelled', label: 'Canceladas' },
 ];
+
+type TaskCardProps = {
+  task: PlannerTask;
+  filter: FilterKey;
+  memberNameById: Map<string, string>;
+  today: string;
+  savingId: string | null;
+  onEditTask?: (taskId: string) => void;
+  onComplete: (task: PlannerTask) => void;
+  onVerify: (task: PlannerTask) => void;
+  onCancel: (task: PlannerTask) => void;
+};
+
+function TaskCard({
+  task,
+  filter,
+  memberNameById,
+  today,
+  savingId,
+  onEditTask,
+  onComplete,
+  onVerify,
+  onCancel,
+}: TaskCardProps) {
+  const getDisplayName = (member: typeof task.assigned_member | typeof task.completed_member | typeof task.verified_member) => {
+    if (!member) return 'Miembro';
+    return member.display_name || 'Miembro';
+  };
+
+  const getPersonLabel = () => {
+    if (task.status === 'pending' || task.status === 'cancelled') {
+      const name = task.assigned_to_member_id
+        ? memberNameById.get(task.assigned_to_member_id) ?? getDisplayName(task.assigned_member)
+        : null;
+      return name || task.assigned_member?.display_name || 'Sin asignar';
+    }
+
+    if (task.status === 'completed' || task.status === 'awaiting_verification' || task.status === 'verified') {
+      return getDisplayName(task.completed_member);
+    }
+
+    return 'Sin asignar';
+  };
+
+  const getSecondaryLabel = () => {
+    if (task.status === 'awaiting_verification') {
+      return 'Lista para revisar';
+    }
+    if (task.status === 'verified' && task.verified_member) {
+      return `Verificada por ${getDisplayName(task.verified_member)}`;
+    }
+    if (task.status === 'cancelled') {
+      return null;
+    }
+    if (task.requires_verification) {
+      return 'Requiere verificación';
+    }
+    return null;
+  };
+
+  const isSaving = savingId === task.id;
+  const isCompleted = ['completed', 'verified'].includes(task.status);
+  const isOverdue = task.status === 'pending' && Boolean(task.due_date) && task.due_date! < today;
+  const isPending = task.status === 'pending';
+  const isAwaiting = task.status === 'awaiting_verification';
+
+  const checkboxAnim = useMemo(() => new Animated.Value(isCompleted ? 1 : 0), [isCompleted]);
+  const pressAnim = useMemo(() => new Animated.Value(1), []);
+
+  useEffect(() => {
+    Animated.timing(checkboxAnim, {
+      toValue: isCompleted ? 1 : 0,
+      duration: 140,
+      useNativeDriver: true,
+    }).start();
+  }, [isCompleted, checkboxAnim]);
+
+  const handlePressIn = () => {
+    Animated.spring(pressAnim, {
+      toValue: 0.98,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(pressAnim, {
+      toValue: 1,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const getPriorityBorder = (priority: PlannerTaskPriority) => {
+    switch (priority) {
+      case 'low': return S.taskCardBorderLow;
+      case 'high': return S.taskCardBorderHigh;
+      case 'critical': return S.taskCardBorderCritical;
+      default: return S.taskCardBorderNormal;
+    }
+  };
+
+  const getBadgeStyle = () => {
+    if (isOverdue && filter !== 'done' && filter !== 'cancelled') return [S.badge, S.taskBadgeOverdue];
+    if (task.status === 'verified') return [S.badge, S.taskBadgeVerified];
+    if (task.status === 'completed') return [S.badge, S.taskBadgeCompleted];
+    if (task.status === 'awaiting_verification') return [S.badge, S.taskBadgeAwaiting];
+    if (task.status === 'cancelled') return [S.badge, S.taskBadgeCancelled];
+    return [S.badge, S.taskBadgePending];
+  };
+
+  const getBadgeText = () => {
+    if (isOverdue && filter !== 'done' && filter !== 'cancelled') return 'Vencida';
+    if (task.status === 'awaiting_verification') return 'Necesita revisión';
+    return statusLabels[task.status];
+  };
+
+  const getBadgeTextStyle = () => {
+    if (isOverdue && filter !== 'done' && filter !== 'cancelled') return [S.badgeText, S.taskBadgeOverdueText];
+    if (task.status === 'verified') return [S.badgeText, S.taskBadgeVerifiedText];
+    if (task.status === 'completed') return [S.badgeText, S.taskBadgeCompletedText];
+    if (task.status === 'awaiting_verification') return [S.badgeText, S.taskBadgeAwaitingText];
+    if (task.status === 'cancelled') return [S.badgeText, S.taskBadgeCancelledText];
+    return [S.badgeText, S.taskBadgePendingText];
+  };
+
+  const personLabel = getPersonLabel();
+  const secondaryLabel = getSecondaryLabel();
+
+  return (
+    <Animated.View style={[S.card, getPriorityBorder(task.priority), { marginBottom: 12 }, { opacity: pressAnim }]}>
+      <TouchableOpacity
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+      >
+        <View style={[S.headerRow, { alignItems: 'flex-start' }]}>
+          <Animated.View style={[S.checkboxAnimated, isCompleted && S.checkboxAnimatedChecked, { transform: [{ scale: checkboxAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }]}>
+            <Text style={S.checkboxText}>{isCompleted ? '✓' : ''}</Text>
+          </Animated.View>
+          <View style={{ flex: 1, marginLeft: 8 }}>
+            <Text style={{ color: '#17201A', fontSize: 17, fontWeight: '700' }}>{task.title}</Text>
+            <Text style={S.taskDateLabel}>
+              {formatDate(task.due_date)} {formatTime(task.due_time)}
+              {task.due_date === today && ' · Para hoy'}
+              {isOverdue && ' · Vencida'}
+            </Text>
+          </View>
+          <View style={getBadgeStyle()}>
+            <Text style={getBadgeTextStyle()}>{getBadgeText()}</Text>
+          </View>
+        </View>
+        {task.description ? <Text style={S.taskDescription}>{task.description}</Text> : null}
+        
+        <View style={S.taskMetadataRow}>
+          <View style={S.taskMetadataChip}>
+            <Text style={S.taskMetadataChipText}>{priorityLabels[task.priority]}</Text>
+          </View>
+          <View style={S.taskMetadataChip}>
+            <Text style={S.taskMetadataChipText}>{task.category || task.template_key || 'Sin categoría'}</Text>
+          </View>
+        </View>
+        
+        <Text style={S.taskPersonLabel}>Asignada a {personLabel}</Text>
+        
+        {secondaryLabel ? (
+          <Text style={[S.muted, { marginTop: 6 }]}>{secondaryLabel}</Text>
+        ) : null}
+
+        <View style={S.taskActionsRow}>
+          {isPending ? (
+            <TouchableOpacity
+              style={[S.taskPrimaryAction, isSaving && { opacity: 0.6 }]}
+              onPress={() => onComplete(task)}
+              disabled={isSaving}
+            >
+              <Text style={S.taskPrimaryActionText}>Completar</Text>
+            </TouchableOpacity>
+          ) : null}
+          {isAwaiting ? (
+            <TouchableOpacity
+              style={[S.taskPrimaryAction, isSaving && { opacity: 0.6 }]}
+              onPress={() => onVerify(task)}
+              disabled={isSaving}
+            >
+              <Text style={S.taskPrimaryActionText}>Verificar</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity 
+            style={[S.taskSecondaryAction, isSaving && { opacity: 0.6 }]} 
+            onPress={() => onEditTask?.(task.id)}
+            disabled={isSaving}
+          >
+            <Text style={S.taskSecondaryActionText}>Editar</Text>
+          </TouchableOpacity>
+          {task.status !== 'cancelled' ? (
+            <TouchableOpacity 
+              style={[S.dangerBtn, isSaving && { opacity: 0.6 }]} 
+              onPress={() => onCancel(task)} 
+              disabled={isSaving}
+            >
+              <Text style={S.dangerText}>Cancelar</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
 
 export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEditTask }: Props) {
   const { session, authMe, loading: authLoading } = useAuth();
@@ -89,9 +298,36 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
     )?.id ?? '';
   }, [authMe?.active_household?.id, authMe?.memberships]);
 
-  const visibleTasks = useMemo(() => {
-    const today = dateToYMD(new Date());
+  const today = dateToYMD(new Date());
 
+  const filterCounts = useMemo(() => {
+    const counts: Record<FilterKey, number> = {
+      open: 0,
+      mine: 0,
+      family: 0,
+      today: 0,
+      overdue: 0,
+      awaiting: 0,
+      done: 0,
+      cancelled: 0,
+    };
+
+    tasks.forEach((task) => {
+      const isOpen = ['pending', 'awaiting_verification'].includes(task.status);
+      if (isOpen) counts.open++;
+      if (isOpen && task.assigned_to_member_id === myMembershipId) counts.mine++;
+      if (isOpen) counts.family++;
+      if (task.status !== 'cancelled' && task.due_date === today) counts.today++;
+      if (task.status === 'pending' && Boolean(task.due_date) && task.due_date! < today) counts.overdue++;
+      if (task.status === 'awaiting_verification') counts.awaiting++;
+      if (['completed', 'verified'].includes(task.status)) counts.done++;
+      if (task.status === 'cancelled') counts.cancelled++;
+    });
+
+    return counts;
+  }, [tasks, myMembershipId, today]);
+
+  const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
       const isOpen = ['pending', 'awaiting_verification'].includes(task.status);
       if (filter === 'mine') return isOpen && task.assigned_to_member_id === myMembershipId;
@@ -125,7 +361,7 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
       if (priorityDiff !== 0) return priorityDiff;
       return priorityOrder[a.priority] - priorityOrder[b.priority];
     });
-  }, [filter, myMembershipId, tasks]);
+  }, [filter, myMembershipId, tasks, today]);
 
   const runMutation = async (task: PlannerTask, action: 'complete' | 'verify') => {
     if (!accessToken) return;
@@ -171,6 +407,16 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
     }
   };
 
+  const confirmComplete = async (task: PlannerTask) => {
+    await lightHaptic();
+    await runMutation(task, 'complete');
+  };
+
+  const confirmVerify = async (task: PlannerTask) => {
+    await lightHaptic();
+    await runMutation(task, 'verify');
+  };
+
   const confirmCancel = (task: PlannerTask) => {
     if (!accessToken) return;
     Alert.alert('¿Cancelar esta tarea?', 'No se va a borrar definitivamente, pero dejará de aparecer como pendiente.', [
@@ -179,6 +425,7 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
         text: 'Cancelar tarea',
         style: 'destructive',
         onPress: async () => {
+          await lightHaptic();
           setSavingId(task.id);
           try {
             await cancelPlannerTask(accessToken, task.id);
@@ -226,13 +473,17 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
         {filters.map((item) => {
           const active = filter === item.key;
+          const count = filterCounts[item.key];
           return (
             <TouchableOpacity
               key={item.key}
-              style={[S.filterChip, active && S.filterChipActive]}
+              style={[S.filterChipWithCount, active && S.filterChipCountActive]}
               onPress={() => setFilter(item.key)}
             >
-              <Text style={[S.filterChipText, active && S.filterChipTextActive]}>{item.label}</Text>
+              <Text style={[S.filterChipCountText, active && S.filterChipCountTextActive]}>{item.label}</Text>
+              <View style={[S.filterCountBadge, active && S.filterCountBadgeActive]}>
+                <Text style={[S.filterCountText, active && S.filterCountTextActive]}>{count}</Text>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -248,112 +499,20 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
         </View>
       ) : null}
 
-      {visibleTasks.map((task) => {
-        const getDisplayName = (member: typeof task.assigned_member | typeof task.completed_member | typeof task.verified_member) => {
-          if (!member) return 'Miembro';
-          return member.display_name || 'Miembro';
-        };
-
-        const getPersonLabel = () => {
-          if (task.status === 'pending' || task.status === 'cancelled') {
-            const name = task.assigned_to_member_id
-              ? memberNameById.get(task.assigned_to_member_id) ?? getDisplayName(task.assigned_member)
-              : null;
-            return name || task.assigned_member?.display_name || 'Sin asignar';
-          }
-
-          if (task.status === 'completed' || task.status === 'awaiting_verification' || task.status === 'verified') {
-            const name = getDisplayName(task.completed_member);
-            return name;
-          }
-
-          return 'Sin asignar';
-        };
-
-        const getSecondaryLabel = () => {
-          if (task.status === 'awaiting_verification') {
-            return 'Pendiente de verificación';
-          }
-          if (task.status === 'verified' && task.verified_member) {
-            return `Verificada por ${getDisplayName(task.verified_member)}`;
-          }
-          if (task.status === 'cancelled') {
-            return null;
-          }
-          return null;
-        };
-
-        const personLabel = getPersonLabel();
-        const secondaryLabel = getSecondaryLabel();
-        const isSaving = savingId === task.id;
-        const today = dateToYMD(new Date());
-        const isOverdue = task.status === 'pending' && Boolean(task.due_date) && task.due_date! < today;
-
-        return (
-          <View key={task.id} style={S.card}>
-            <View style={[S.headerRow, { alignItems: 'flex-start' }]}>
-              <TouchableOpacity
-                style={[S.checkbox, ['completed', 'verified'].includes(task.status) && S.checkboxChecked]}
-                onPress={() => task.status === 'pending' ? void runMutation(task, 'complete') : undefined}
-                disabled={isSaving || task.status !== 'pending'}
-              >
-                <Text style={S.checkboxText}>{['completed', 'verified'].includes(task.status) ? '✓' : ''}</Text>
-              </TouchableOpacity>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: '#17201A', fontSize: 17, fontWeight: '800' }}>{task.title}</Text>
-                <Text style={[S.muted, { marginTop: 4 }]}>
-                  {formatDate(task.due_date)} {formatTime(task.due_time)}
-                </Text>
-              </View>
-              <View style={[S.badge, isOverdue && S.badgeDanger]}>
-                <Text style={[S.badgeText, isOverdue && S.badgeDangerText]}>
-                  {isOverdue && filter !== 'done' && filter !== 'cancelled' ? 'Vencida' : statusLabels[task.status]}
-                </Text>
-              </View>
-            </View>
-            {task.description ? <Text style={[S.muted, { marginTop: 8 }]}>{task.description}</Text> : null}
-            <Text style={[S.muted, { marginTop: 8 }]}>
-              {priorityLabels[task.priority]} · {task.category || task.template_key || 'Sin categoria'} · {personLabel}
-            </Text>
-            {secondaryLabel ? (
-              <Text style={[S.muted, { marginTop: 4 }]}>{secondaryLabel}</Text>
-            ) : (
-              <Text style={[S.muted, { marginTop: 4 }]}>
-                {task.requires_verification ? 'Requiere verificacion' : 'No requiere verificacion'}
-              </Text>
-            )}
-
-            <View style={[S.row, { marginTop: 12 }]}>
-              {task.status === 'pending' ? (
-                <TouchableOpacity
-                  style={[S.secondaryBtn, isSaving && { opacity: 0.6 }]}
-                  onPress={() => void runMutation(task, 'complete')}
-                  disabled={isSaving}
-                >
-                  <Text style={S.secondaryText}>Completar</Text>
-                </TouchableOpacity>
-              ) : null}
-              {task.status === 'awaiting_verification' ? (
-                <TouchableOpacity
-                  style={[S.secondaryBtn, isSaving && { opacity: 0.6 }]}
-                  onPress={() => void runMutation(task, 'verify')}
-                  disabled={isSaving}
-                >
-                  <Text style={S.secondaryText}>Verificar</Text>
-                </TouchableOpacity>
-              ) : null}
-              <TouchableOpacity style={S.secondaryBtn} onPress={() => onEditTask?.(task.id)}>
-                <Text style={S.secondaryText}>Editar</Text>
-              </TouchableOpacity>
-              {task.status !== 'cancelled' ? (
-                <TouchableOpacity style={S.dangerBtn} onPress={() => confirmCancel(task)} disabled={isSaving}>
-                  <Text style={S.dangerText}>Cancelar</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </View>
-        );
-      })}
+      {visibleTasks.map((task) => (
+        <TaskCard
+          key={task.id}
+          task={task}
+          filter={filter}
+          memberNameById={memberNameById}
+          today={today}
+          savingId={savingId}
+          onEditTask={onEditTask}
+          onComplete={confirmComplete}
+          onVerify={confirmVerify}
+          onCancel={confirmCancel}
+        />
+      ))}
     </View>
   );
 }

@@ -12,12 +12,9 @@ import {
   addMonths,
   dateToYMD,
   formatDate,
-  formatTime,
   plannerStyles as S,
-  priorityLabels,
-  recurrenceLabels,
-  statusLabels,
 } from './plannerShared';
+import { CalendarDayCell, AgendaItemCard } from './PlannerCalendarComponents';
 import { spacing } from '../../constants/theme';
 
 type Props = {
@@ -37,11 +34,11 @@ type Props = {
   onEditTask?: (taskId: string) => void;
 };
 
-const viewOptions: Array<{ key: PlannerCalendarView; label: string }> = [
-  { key: 'day', label: 'Dia' },
-  { key: 'week', label: 'Semana' },
-  { key: 'month', label: 'Mes' },
-];
+const viewLabels: Record<PlannerCalendarView, string> = {
+  day: 'Día',
+  week: 'Semana',
+  month: 'Mes',
+};
 
 const getItemDateKey = (item: PlannerCalendarItem) =>
   item.type === 'event' ? dateToYMD(new Date(item.starts_at)) : item.due_date ?? '';
@@ -110,7 +107,7 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
   }, [items]);
 
   const selectedDateKey = dateToYMD(selectedDate);
-  const selectedDateItems = useMemo(
+const selectedDateItems = useMemo(
     () => groupedItems.find(([dateKey]) => dateKey === selectedDateKey)?.[1] ?? [],
     [groupedItems, selectedDateKey],
   );
@@ -133,125 +130,105 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
 
     return days;
   }, [selectedDate]);
+  const today = useMemo(() => dateToYMD(new Date()), []);
+  const viewLabel = viewLabels[view];
 
-  const completeTask = async (taskId: string) => {
-    if (!accessToken) {
-      Alert.alert('Planner', 'No hay sesion activa para completar la tarea.');
-      return;
-    }
-
-    setSavingId(taskId);
-    try {
-      await completePlannerTask(accessToken, taskId);
-      markPlannerChanged();
-      await loadCalendar();
-      onChanged?.();
-    } catch (err) {
-      Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos completar la tarea.');
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-const handleEditEvent = (item: PlannerCalendarEventItem) => {
-  const context =
-    item.is_recurring_occurrence && !item.is_override
-      ? {
-          baseEventId: item.id,
-          occurrenceId: item.occurrence_id,
-          occurrenceStartsAt: item.starts_at,
-          occurrenceEndsAt: item.ends_at ?? undefined,
-          isGeneratedRecurringOccurrence: true,
-        }
-      : undefined;
-
-  onEditEvent?.(item.id, context);
-};
-
-  const confirmCancelEvent = (eventId: string) => {
-    if (!accessToken) return;
-
-    Alert.alert('¿Cancelar este evento?', 'Dejará de aparecer como próximo evento.', [
-      { text: 'Volver', style: 'cancel' },
-      {
-        text: 'Cancelar evento',
-        style: 'destructive',
-        onPress: async () => {
-          setSavingId(eventId);
-          try {
-            await cancelPlannerEvent(accessToken, eventId);
-            markPlannerChanged();
-            await loadCalendar();
-            onChanged?.();
-          } catch (err) {
-            Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos cancelar el evento.');
-          } finally {
-            setSavingId(null);
+  const handleEditEvent = (item: PlannerCalendarEventItem) => {
+    const context =
+      item.is_recurring_occurrence && !item.is_override
+        ? {
+            baseEventId: item.id,
+            occurrenceId: item.occurrence_id,
+            occurrenceStartsAt: item.starts_at,
+            occurrenceEndsAt: item.ends_at ?? undefined,
+            isGeneratedRecurringOccurrence: true,
           }
-        },
-      },
-    ]);
+        : undefined;
+
+    onEditEvent?.(item.id, context);
   };
 
   return (
-    <View>
-      <View style={[S.headerRow, { marginBottom: 12 }]}>
-        <Text style={S.sectionTitle}>Calendario</Text>
+    <View style={{ flex: 1 }}>
+      <View style={[S.headerRow, { marginBottom: 16 }]}>
+        <View>
+          <Text style={S.sectionTitle}>Calendario familiar</Text>
+          <Text style={S.subtitle}>
+            {view === 'day' ? 'Ves un día a la vez' : view === 'week' ? 'Ves la semana completa' : 'Ves todo el mes'}
+          </Text>
+        </View>
         <TouchableOpacity style={S.primaryBtn} onPress={onCreateEvent}>
-          <Text style={S.btnText}>Nuevo evento</Text>
+          <Text style={S.btnText}>Nuevo</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-        {viewOptions.map((item) => {
-          const active = view === item.key;
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ paddingRight: spacing[4] }}>
+        {(['day', 'week', 'month'] as PlannerCalendarView[]).map((viewKey) => {
+          const active = view === viewKey;
           return (
             <TouchableOpacity
-              key={item.key}
-              style={[S.filterChip, active && S.filterChipActive]}
-              onPress={() => setView(item.key)}
+              key={viewKey}
+              style={[S.calendarViewChip, active && S.calendarViewChipActive]}
+              onPress={() => setView(viewKey)}
             >
-              <Text style={[S.filterChipText, active && S.filterChipTextActive]}>{item.label}</Text>
+              <Text style={[S.calendarViewChipText, active && S.calendarViewChipTextActive]}>{viewLabels[viewKey]}</Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      <View style={[S.row, { marginBottom: 10 }]}>
-        <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => setSelectedDate((prev) => moveDate(prev, view, -1))}>
+      <View style={[S.row, { marginBottom: 14 }]}>
+        <TouchableOpacity
+          style={[S.secondaryBtn, { flex: 1, minHeight: 40, paddingVertical: 8 }]}
+          onPress={() => setSelectedDate((prev) => moveDate(prev, view, -1))}
+        >
           <Text style={S.secondaryText}>Anterior</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => setSelectedDate(new Date())}>
-          <Text style={S.secondaryText}>Hoy</Text>
+        <TouchableOpacity
+          style={[S.primaryBtn, { flex: 1, minHeight: 40, paddingVertical: 8, marginLeft: spacing[2] }]}
+          onPress={() => setSelectedDate(new Date())}
+        >
+          <Text style={S.btnText}>Hoy</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => setSelectedDate((prev) => moveDate(prev, view, 1))}>
+        <TouchableOpacity
+          style={[S.secondaryBtn, { flex: 1, minHeight: 40, paddingVertical: 8, marginLeft: spacing[2] }]}
+          onPress={() => setSelectedDate((prev) => moveDate(prev, view, 1))}
+        >
           <Text style={S.secondaryText}>Siguiente</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={[S.subtitle, { marginBottom: 12 }]}>
-        {view === 'month' ? 'Agenda mensual' : view === 'week' ? 'Agenda semanal' : 'Agenda del dia'} · {formatDate(dateToYMD(selectedDate))}
+      <Text style={[S.label, { marginBottom: 10, textTransform: 'none', fontSize: 13 }]}>
+        {view === 'month'
+          ? `Este mes de ${selectedDate.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}`
+          : view === 'week'
+          ? `Esta semana del ${formatDate(dateToYMD(addDays(selectedDate, -selectedDate.getDay())))} al ${formatDate(dateToYMD(addDays(selectedDate, 6 - selectedDate.getDay())))}`
+          : `Hoy, ${formatDate(dateToYMD(selectedDate))}`}
       </Text>
 
-      <View style={[S.monthGrid, { marginBottom: 16 }]}>
-        {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((day, index) => (
-          <Text key={`${day}-${index}`} style={S.monthWeekday}>{day}</Text>
+      <View style={[S.monthGrid, { marginBottom: 20 }]}>
+        {['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((day, index) => (
+          <Text key={day} style={S.monthWeekday}>{day.slice(0, 1)}</Text>
         ))}
         {monthDays.map((day, index) => {
           const dateKey = day ? dateToYMD(day) : '';
           const selected = dateKey === selectedDateKey;
-          const hasEvents = eventDates.has(dateKey);
+          const isToday = dateKey === today;
+          const dayItems = groupedItems.find(([dk]) => dk === dateKey)?.[1] ?? [];
+          const hasEvent = dayItems.some((item) => item.type === 'event');
+          const hasTask = dayItems.some((item) => item.type === 'task');
 
           return (
-            <TouchableOpacity
+            <CalendarDayCell
               key={`${dateKey || 'blank'}-${index}`}
-              style={[S.monthDay, selected && S.monthDaySelected]}
-              disabled={!day}
-              onPress={() => day ? setSelectedDate(day) : undefined}
-            >
-              <Text style={[S.monthDayText, selected && S.monthDayTextSelected]}>{day ? day.getDate() : ''}</Text>
-              {hasEvents ? <View style={[S.eventDot, selected && S.eventDotSelected]} /> : null}
-            </TouchableOpacity>
+              day={day}
+              dateKey={dateKey}
+              selected={selected}
+              isToday={isToday}
+              hasEvent={hasEvent}
+              hasTask={hasTask}
+              onPress={() => day && setSelectedDate(day)}
+            />
           );
         })}
       </View>
@@ -272,97 +249,108 @@ const handleEditEvent = (item: PlannerCalendarEventItem) => {
       ) : null}
 
       {!loading && !error && groupedItems.length === 0 ? (
-        <View style={S.emptyBox}>
-          <Text style={S.emptyTitle}>Todavía no hay eventos</Text>
-          <Text style={S.emptyText}>Agregá un evento familiar para verlo en el calendario.</Text>
-          <TouchableOpacity style={[S.primaryBtn, { marginTop: 14 }]} onPress={onCreateEvent}>
+        <View style={S.calendarEmptyState}>
+          <Text style={S.calendarEmptyTitle}>📅 No hay nada programado</Text>
+          <Text style={S.calendarEmptyText}>
+            Todavía no tenés eventos ni tareas. <Text style={{ fontWeight: '700' }}>Sumá un evento familiar</Text> para empezar a organizar la semana.
+          </Text>
+          <TouchableOpacity style={[S.primaryBtn, { marginTop: 8 }]} onPress={onCreateEvent}>
             <Text style={S.btnText}>Crear evento</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
       {!loading && !error && groupedItems.length > 0 && selectedDateItems.length === 0 ? (
-        <View style={S.emptyBox}>
-          <Text style={S.emptyText}>No hay eventos para este día.</Text>
+        <View style={S.calendarEmptyState}>
+          <Text style={S.calendarEmptyTitle}>✨ Día tranquilo</Text>
+          <Text style={S.calendarEmptyText}>
+            No tenés nada programado para este día. Aprovechá para descansar o sumá una tarea familiar.
+          </Text>
+          <TouchableOpacity style={[S.secondaryBtn, { marginTop: 8 }]} onPress={onCreateEvent}>
+            <Text style={S.secondaryText}>Crear evento</Text>
+          </TouchableOpacity>
         </View>
       ) : null}
 
-      {!loading && !error
-        ? ([[selectedDateKey, selectedDateItems] as [string, PlannerCalendarItem[]]])
+      {!loading && !error && groupedItems.length > 0 ? (
+        <View>
+          {([[selectedDateKey, selectedDateItems] as [string, PlannerCalendarItem[]]])
             .filter(([, dateItems]) => dateItems.length > 0)
             .map(([dateKey, dateItems]) => (
-            <View key={dateKey} style={{ marginBottom: 12 }}>
-              <Text style={[S.label, { marginTop: 8 }]}>{formatDate(dateKey)}</Text>
+            <View key={dateKey}>
+              <Text style={[S.label, { marginTop: 8, textTransform: 'none', fontSize: 13 }]}>
+                Agenda de {formatDate(dateKey)}
+              </Text>
               {dateItems.map((item) => {
                 const uniqueKey = item.type === 'event' ? item.occurrence_id ?? item.id : item.id;
                 const isSaving = savingId === item.id;
 
-                if (item.type === 'event') {
-                  return (
-                    <View key={uniqueKey} style={[S.card, { padding: spacing[3], marginBottom: spacing[2] }]}>
-                      <View style={[S.headerRow, { alignItems: 'flex-start' }]}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ color: '#17201A', fontSize: 15, fontWeight: '800' }}>{item.title}</Text>
-                          <Text style={[S.muted, { marginTop: 2, fontSize: 12 }]}>
-                            {item.all_day ? 'Todo el dia' : `${formatTime(item.starts_at)} - ${formatTime(item.ends_at)}`}
-                          </Text>
-                        </View>
-                        <View style={[S.badge, { alignSelf: 'center' }]}>
-                          <Text style={S.badgeText}>Evento</Text>
-                        </View>
-                      </View>
-                      <Text style={[S.muted, { marginTop: 6, fontSize: 12 }]}>
-                        {item.location_name || 'Sin ubicacion'} · {recurrenceLabels[item.recurrence]}
-                      </Text>
-                      <View style={[S.row, { marginTop: 10 }]}>
-                        <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => handleEditEvent(item)}>
-                          <Text style={S.secondaryText}>Editar</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[S.dangerBtn, { minHeight: 36, paddingVertical: 6 }, isSaving && { opacity: 0.6 }]}
-                          onPress={() => confirmCancelEvent(item.id)}
-                          disabled={isSaving}
-                        >
-                          <Text style={S.dangerText}>Cancelar</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                }
-
                 return (
-                  <View key={uniqueKey} style={[S.card, { padding: spacing[3], marginBottom: spacing[2] }]}>
-                    <View style={[S.headerRow, { alignItems: 'flex-start' }]}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#17201A', fontSize: 15, fontWeight: '800' }}>{item.title}</Text>
-                        <Text style={[S.muted, { marginTop: 2, fontSize: 12 }]}>
-                          {formatTime(item.due_time)} · {priorityLabels[item.priority]} · {statusLabels[item.status]}
-                        </Text>
-                      </View>
-                      <View style={[S.badge, { alignSelf: 'center' }]}>
-                        <Text style={S.badgeText}>Tarea</Text>
-                      </View>
-                    </View>
-                    <View style={[S.row, { marginTop: 10 }]}>
-                      {['pending', 'awaiting_verification'].includes(item.status) ? (
-                        <TouchableOpacity
-                          style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }, isSaving && { opacity: 0.6 }]}
-                          onPress={() => void completeTask(item.id)}
-                          disabled={isSaving}
-                        >
-                          <Text style={S.secondaryText}>Completar</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                      <TouchableOpacity style={[S.secondaryBtn, { minHeight: 36, paddingVertical: 6 }]} onPress={() => onEditTask?.(item.id)}>
-                        <Text style={S.secondaryText}>Editar</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
+                  <AgendaItemCard
+                    key={uniqueKey}
+                    item={item}
+                    isSaving={isSaving}
+                    onEditEvent={(evt) => {
+                      const context =
+                        evt.is_recurring_occurrence && !evt.is_override
+                          ? {
+                              baseEventId: evt.id,
+                              occurrenceId: evt.occurrence_id,
+                              occurrenceStartsAt: evt.starts_at,
+                              occurrenceEndsAt: evt.ends_at ?? undefined,
+                              isGeneratedRecurringOccurrence: true,
+                            }
+                          : undefined;
+                      onEditEvent?.(evt.id, context);
+                    }}
+                    onCancelEvent={(eventId) => {
+                      if (!accessToken) return;
+                      Alert.alert('¿Cancelar este evento?', 'Dejará de aparecer como próximo evento.', [
+                        { text: 'Volver', style: 'cancel' },
+                        {
+                          text: 'Cancelar evento',
+                          style: 'destructive',
+                          onPress: async () => {
+                            setSavingId(eventId);
+                            try {
+                              await cancelPlannerEvent(accessToken, eventId);
+                              markPlannerChanged();
+                              await loadCalendar();
+                              onChanged?.();
+                            } catch (err) {
+                              Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos cancelar el evento.');
+                            } finally {
+                              setSavingId(null);
+                            }
+                          },
+                        },
+                      ]);
+                    }}
+                    onEditTask={(taskId) => onEditTask?.(taskId)}
+                    onCompleteTask={async (taskId) => {
+                      if (!accessToken) {
+                        Alert.alert('Planner', 'No hay sesión activa para completar la tarea.');
+                        return;
+                      }
+                      setSavingId(taskId);
+                      try {
+                        await completePlannerTask(accessToken, taskId);
+                        markPlannerChanged();
+                        await loadCalendar();
+                        onChanged?.();
+                      } catch (err) {
+                        Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos completar la tarea.');
+                      } finally {
+                        setSavingId(null);
+                      }
+                    }}
+                  />
                 );
               })}
             </View>
-          ))
-        : null}
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 }

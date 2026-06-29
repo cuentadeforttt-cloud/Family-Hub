@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, Modal, Pressable, RefreshControl, ScrollView, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { ActionPill, AppButton, AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
+import { AppCard, AppText, ErrorState, Skeleton } from '../../components/ui';
 import { APP_ICONS, HomePlusIcon } from '../../constants/icons';
 import { colors, radius } from '../../constants/theme';
 import { ApiError } from '../../services/api';
@@ -131,6 +131,9 @@ export function PlannerScreen() {
         <View style={[S.headerRow, { marginBottom: 8 }]}>
           <View style={{ flex: 1 }}>
             <AppText variant="title1">Planner</AppText>
+            <AppText variant="bodySmall" tone="secondary" style={S.subtitle}>
+              Organizá tareas, eventos y el ritmo de tu casa en un solo lugar.
+            </AppText>
           </View>
         </View>
 
@@ -139,37 +142,29 @@ export function PlannerScreen() {
             style={[S.topbarTab, activeTab === 'tasks' && S.topbarTabActive]}
             onPress={() => setActiveTab('tasks')}
           >
-            <HomePlusIcon name={APP_ICONS.planner.todo} size={16} color={activeTab === 'tasks' ? '#FFFFFF' : '#8A8178'} />
+            <HomePlusIcon name={APP_ICONS.planner.todo} size={16} color={activeTab === 'tasks' ? colors.terracotta[700] : colors.text.tertiary} />
             <AppText variant="micro" tone={activeTab === 'tasks' ? 'primary' : 'tertiary'} weight={activeTab === 'tasks' ? '700' : '500'} style={activeTab === 'tasks' ? S.topbarTabTextActive : S.topbarTabText}>Tareas</AppText>
           </TouchableOpacity>
           <TouchableOpacity
             style={[S.topbarTab, activeTab === 'calendar' && S.topbarTabActive]}
             onPress={() => setActiveTab('calendar')}
           >
-            <HomePlusIcon name={APP_ICONS.planner.calendar} size={16} color={activeTab === 'calendar' ? '#FFFFFF' : '#8A8178'} />
+            <HomePlusIcon name={APP_ICONS.planner.calendar} size={16} color={activeTab === 'calendar' ? colors.terracotta[700] : colors.text.tertiary} />
             <AppText variant="micro" tone={activeTab === 'calendar' ? 'primary' : 'tertiary'} weight={activeTab === 'calendar' ? '700' : '500'} style={activeTab === 'calendar' ? S.topbarTabTextActive : S.topbarTabText}>Calendario</AppText>
           </TouchableOpacity>
           <TouchableOpacity
             style={[S.topbarTab, activeTab === 'goals' && S.topbarTabActive]}
             onPress={() => setActiveTab('goals')}
           >
-            <HomePlusIcon name={APP_ICONS.planner.goals} size={16} color={activeTab === 'goals' ? '#FFFFFF' : '#8A8178'} />
+            <HomePlusIcon name={APP_ICONS.planner.goals} size={16} color={activeTab === 'goals' ? colors.terracotta[700] : colors.text.tertiary} />
             <AppText variant="micro" tone={activeTab === 'goals' ? 'primary' : 'tertiary'} weight={activeTab === 'goals' ? '700' : '500'} style={activeTab === 'goals' ? S.topbarTabTextActive : S.topbarTabText}>Metas</AppText>
           </TouchableOpacity>
         </View>
 
-        <View style={[S.headerRow, { marginBottom: 12 }]}>
-          <View style={{ flex: 1 }}>
-            <AppText variant="bodySmall" tone="secondary" style={S.subtitle}>
-              Tareas, eventos y calendario compartido.
-            </AppText>
-          </View>
-          <AppButton title="Actualizar" variant="secondary" size="sm" onPress={() => void refresh()} />
-        </View>
-
         {toast ? (
           <View style={S.toastBox}>
-            <AppText variant="bodySmall" tone="success" weight="700">{toast}</AppText>
+            <HomePlusIcon name="checkmark-circle" size={18} color={colors.success.strong} />
+            <AppText variant="bodySmall" tone="success" weight="700" style={{ flex: 1 }}>{toast}</AppText>
           </View>
         ) : null}
 
@@ -185,26 +180,26 @@ export function PlannerScreen() {
           <>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
               <View style={[S.row, { gap: 8 }]}>
-                <AppCard variant="quiet" padding="compact" style={S.statCard}>
+                <AppCard variant="quiet" padding="compact" style={[S.statCard, S.statCardPending]}>
                   <AppText variant="micro" tone="tertiary" weight="700" style={S.statLabel}>Pendientes</AppText>
                   <AppText variant="title2" style={S.statValue}>
                     {summary?.pending_tasks_count ?? 0}
                   </AppText>
                 </AppCard>
-                <AppCard variant="quiet" padding="compact" style={S.statCard}>
-                  <AppText variant="micro" tone="tertiary" weight="700" style={S.statLabel}>Hoy</AppText>
-                  <AppText variant="title2" style={S.statValue}>
+                <AppCard variant="quiet" padding="compact" style={[S.statCard, S.statCardToday]}>
+                  <AppText variant="micro" tone="warning" weight="700" style={[S.statLabel, S.statLabelToday]}>Hoy</AppText>
+                  <AppText variant="title2" style={[S.statValue, S.statValueToday]}>
                     {summary?.today_tasks_count ?? 0}
                   </AppText>
                 </AppCard>
-                <AppCard variant="warning" padding="compact" style={S.statCard}>
+                <AppCard variant="warning" padding="compact" style={[S.statCard, S.statCardOverdue]}>
                   <AppText variant="micro" tone="warning" weight="700" style={S.statLabel}>Vencidas</AppText>
                   <AppText variant="title2" style={S.statValue}>
                     {summary?.overdue_tasks_count ?? 0}
                   </AppText>
                 </AppCard>
-                <AppCard variant="success" padding="compact" style={S.statCard}>
-                  <AppText variant="micro" tone="success" weight="700" style={S.statLabel}>Por verificar</AppText>
+                <AppCard variant="success" padding="compact" style={[S.statCard, S.statCardReview]}>
+                  <AppText variant="micro" tone="success" weight="700" style={S.statLabel}>A revisar</AppText>
                   <AppText variant="title2" style={S.statValue}>
                     {summary?.awaiting_verification_count ?? 0}
                   </AppText>
@@ -250,7 +245,12 @@ export function PlannerScreen() {
 
         {activeTab === 'goals' ? (
           <View style={{ marginTop: 8 }}>
-            <AppText variant="title3" style={{ marginBottom: 4 }}>Metas familiares</AppText>
+            <View style={[S.headerRow, { marginBottom: 4 }]}>
+              <AppText variant="title3">Metas familiares</AppText>
+              <View style={[S.badge, { backgroundColor: colors.sand[100] }]}>
+                <AppText variant="micro" weight="700" tone="tertiary">Próximamente</AppText>
+              </View>
+            </View>
             <AppText variant="bodySmall" tone="secondary" style={{ marginBottom: 16 }}>
               Pequeños avances para organizar mejor la semana.
             </AppText>
@@ -268,7 +268,7 @@ export function PlannerScreen() {
               <View style={{ backgroundColor: colors.border.subtle, borderRadius: radius.pill, height: 8, overflow: 'hidden' }}>
                 <View style={{ width: '60%', height: '100%', backgroundColor: colors.sage[500] }} />
               </View>
-              <AppText variant="micro" tone="tertiary" style={{ marginTop: 8 }}>Vista demo · 60% completado</AppText>
+              <AppText variant="micro" tone="tertiary" style={{ marginTop: 8 }}>Próximamente</AppText>
             </View>
 
             <View style={[S.card, { marginBottom: 12 }]}>
@@ -280,7 +280,7 @@ export function PlannerScreen() {
                   </AppText>
                 </View>
                 <View style={[S.badge, { alignSelf: 'center' }]}>
-                  <AppText variant="micro" weight="700">En seguimiento</AppText>
+                  <AppText variant="micro" weight="700">Próximamente</AppText>
                 </View>
               </View>
               <AppText variant="bodySmall" tone="tertiary">
