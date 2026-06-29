@@ -20,12 +20,17 @@ type Status = 'loading' | 'success' | 'error';
 
 export const JoinHouseholdScreen = ({ route }: Props) => {
   const { token } = route.params;
-  const { user, clearPendingJoinToken, refetchMe } = useAuth();
+  const { user, clearPendingJoinToken, refetchMe, signOut } = useAuth();
   const { reload } = useHousehold();
 
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const didRun = useRef(false);
+
+  const handleSignOut = async () => {
+    await clearPendingJoinToken();
+    await signOut();
+  };
 
   useEffect(() => {
     if (didRun.current || !user) return;
@@ -87,8 +92,9 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
   }
 
   // Error state
-  const isAlreadyMember = errorMessage.includes('Ya eres miembro');
+  const isAlreadyMember = errorMessage.includes('Ya sos miembro');
   const isExpired = errorMessage.includes('expiró');
+  const isSessionError = errorMessage.includes('sesion') || errorMessage.includes('token') || errorMessage.includes('401');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -101,7 +107,12 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
           <Text style={styles.errorMessage}>{errorMessage}</Text>
           {isExpired && (
             <Text style={styles.errorHint}>
-              Pedile al coordinador que genere una nueva invitación.
+              Pedile al coordinador que genere una nueva invitacion.
+            </Text>
+          )}
+          {isSessionError && (
+            <Text style={styles.errorHint}>
+              Puede ser un problema de sesion. Probá cerrando sesion e intentando de nuevo.
             </Text>
           )}
         </View>
@@ -114,6 +125,15 @@ export const JoinHouseholdScreen = ({ route }: Props) => {
             {isAlreadyMember ? 'Ir a mi hogar →' : 'Volver al inicio →'}
           </Text>
         </TouchableOpacity>
+        {isSessionError && (
+          <TouchableOpacity
+            style={[styles.continueBtn, { marginTop: 12, backgroundColor: '#CD7353' }]}
+            onPress={() => void handleSignOut()}
+            accessibilityRole="button"
+          >
+            <Text style={styles.continueBtnText}>Volver a iniciar sesion →</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </SafeAreaView>
   );

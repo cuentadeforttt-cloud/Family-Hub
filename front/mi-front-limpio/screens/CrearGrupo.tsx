@@ -48,7 +48,7 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [focusedInput, setFocusedInput] = useState<'household' | 'join' | null>(null);
 
-  const handleCreate = async () => {
+const handleCreate = async () => {
     Keyboard.dismiss();
 
     if (!nombreHogar.trim()) {
@@ -59,7 +59,7 @@ export const P02CrearGrupo = ({ navigation }: Props) => {
     const accessToken = session?.access_token;
 
     if (!accessToken) {
-      setErrorMessage('Tu sesión expiró. Iniciá sesión nuevamente.');
+      setErrorMessage('Tu sesion vencio. Volvé a iniciar sesion.');
       return;
     }
 

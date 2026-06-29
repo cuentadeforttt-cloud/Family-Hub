@@ -36,18 +36,25 @@ const HouseholdErrorScreen = () => {
 };
 
 const AuthMeErrorScreen = () => {
-  const { authMeError, refetchMe } = useAuth();
+  const { authMeError, refetchMe, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
 
   return (
     <View style={errStyles.container}>
       <Text style={errStyles.icon}>!</Text>
-      <Text style={errStyles.title}>No pudimos cargar tu sesion</Text>
+      <Text style={errStyles.title}>No pudimos cargar tu cuenta</Text>
       <Text style={errStyles.subtitle}>
-        {authMeError ?? 'Puede ser un problema de conexion o de configuracion.'}{'\n'}
-        Revisa tu conexion e intenta de nuevo.
+        {authMeError ?? 'Puede ser una sesion vencida o un problema de conexion.'}{'\n'}
+        Revisa tu conexion o cerrá sesion e intentá de nuevo.
       </Text>
       <TouchableOpacity style={errStyles.btn} onPress={() => void refetchMe()}>
         <Text style={errStyles.btnText}>Reintentar</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={errStyles.secondaryBtn} onPress={() => void handleSignOut()}>
+        <Text style={errStyles.secondaryBtnText}>Cerrar sesion</Text>
       </TouchableOpacity>
     </View>
   );
