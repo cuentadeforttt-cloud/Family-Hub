@@ -10,6 +10,7 @@ const {
 } = require('../lib/auth.service')
 const { createHttpError, sendError } = require('../lib/httpErrors')
 const { buildMe } = require('../lib/me.service')
+const { isSupabaseTimeout, createSupabaseTimeoutError } = require('../lib/supabaseErrors')
 
 const register = async (req, res) => {
   let createdUserId = null
@@ -74,6 +75,10 @@ const login = async (req, res) => {
       email: normalizeString(req.body.email),
       password: String(req.body.password),
     })
+
+    if (isSupabaseTimeout(error)) {
+      throw createSupabaseTimeoutError()
+    }
 
     if (error) {
       throw createHttpError(401, error.message, 'auth_login_failed')

@@ -5,6 +5,7 @@ const {
   supabaseAuth,
 } = require('../config/supabase')
 const { createHttpError } = require('./httpErrors')
+const { isSupabaseTimeout, createSupabaseTimeoutError } = require('./supabaseErrors')
 
 const normalizeString = (value) => (typeof value === 'string' ? value.trim() : '')
 
@@ -52,6 +53,10 @@ const getAuthenticatedUser = async (accessToken) => {
   }
 
   const { data, error } = await supabaseAuth.auth.getUser(accessToken)
+
+  if (isSupabaseTimeout(error)) {
+    throw createSupabaseTimeoutError()
+  }
 
   if (error || !data.user) {
     throw createHttpError(401, 'Token invalido o expirado.', 'token_invalid')
