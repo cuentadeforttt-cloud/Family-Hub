@@ -9,6 +9,8 @@ import React, {
 } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session, User } from '@supabase/supabase-js';
 import {
@@ -22,6 +24,8 @@ import {
 } from '../services/api';
 import { supabase } from '../supabase';
 import { getAuthErrorMessage } from '../utils/authErrors';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const PENDING_JOIN_KEY = 'pendingJoinToken';
 
@@ -57,6 +61,7 @@ export type AuthContextType = {
   signIn: (params: SignInParams) => Promise<AuthActionResult>;
   signUp: (params: SignUpParams) => Promise<SignUpResult>;
   signInWithGoogle: () => Promise<AuthActionResult>;
+  signInWithApple: () => Promise<AuthActionResult>;
   signOut: () => Promise<AuthActionResult>;
   resetPassword: (email: string) => Promise<AuthActionResult>;
   updatePassword: (password: string) => Promise<AuthActionResult>;
@@ -231,7 +236,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const { path, accessToken, refreshToken, code, type, errorCode, errorDescription, hasAuthParams, queryParams } =
         parseAuthUrl(url);
 
-      // Handle invitation join link: familyhub://join?token=xxx
+      // Handle invitation join link: homeplus://join?token=xxx
       const joinToken = getFirstValue(queryParams?.token);
       if ((path === 'join' || path === '/join') && joinToken) {
         if (isMountedRef.current) setPendingJoinToken(joinToken);
@@ -309,10 +314,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setInitialized(true);
     });
 
-    const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
-      void handleIncomingUrl(url);
-    });
-
     const appStateSubscription =
       Platform.OS !== 'web'
         ? AppState.addEventListener('change', (state) => {
@@ -330,13 +331,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const bootstrapAuth = async () => {
       try {
+        // Only check initial URL for OAuth callbacks when app starts from cold
+        // React Navigation will handle subsequent URL events via its linking config
         const initialUrl = await Linking.getInitialURL();
 
         if (initialUrl) {
-          const result = await handleIncomingUrl(initialUrl);
+          console.log('[AuthContext] Initial URL:', initialUrl);
+          const { path, accessToken, refreshToken, code, type, errorCode, errorDescription, hasAuthParams } =
+            parseAuthUrl(initialUrl);
 
-          if (result.error) {
-            console.warn(result.error);
+          console.log('[AuthContext] Parsed path:', path, 'hasAuthParams:', hasAuthParams, 'code:', code);
+
+          if (hasAuthParams) {
+            if (errorCode || errorDescription) {
+              console.warn('[AuthContext] OAuth error:', errorDescription);
+            } else if (code) {
+              console.log('[AuthContext] Exchanging OAuth code for session');
+              const { error } = await supabase.auth.exchangeCodeForSession(code);
+              if (error) {
+                console.warn('[AuthContext] Code exchange error:', error.message);
+              }
+            } else if (accessToken && refreshToken) {
+              console.log('[AuthContext] Setting session from URL tokens');
+              const { error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+              if (error) {
+                console.warn('[AuthContext] Set session error:', error.message);
+              }
+            }
+
+            if (type === 'recovery') {
+              setIsPasswordRecovery(true);
+            }
           }
         }
 
@@ -360,7 +388,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       isMountedRef.current = false;
       subscription.unsubscribe();
-      linkingSubscription.remove();
       appStateSubscription?.remove();
 
       if (Platform.OS !== 'web') {
@@ -411,6 +438,7 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
+        skipBrowserRedirect: true,
       },
     });
 
@@ -423,14 +451,127 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
       };
     }
 
-    if (!data.url) {
+    if (!data?.url) {
+      console.warn('[GoogleOAuth] no URL returned from Supabase');
       return {
         error: 'No pudimos iniciar el flujo de Google. Intenta nuevamente.',
       };
     }
 
-    return { error: null };
-  }, []);
+    const browserResult = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+    if (browserResult.type === 'cancel') {
+      return { error: null };
+    }
+
+    if (browserResult.type === 'dismiss') {
+      return { error: null };
+    }
+
+    if (browserResult.type === 'success' && browserResult.url) {
+      const { code, accessToken, refreshToken, errorCode, errorDescription } = parseAuthUrl(browserResult.url);
+
+      if (errorCode || errorDescription) {
+        console.warn('[GoogleOAuth] OAuth error from browser:', errorDescription);
+        return {
+          error: errorDescription || 'Error al autenticar con Google.',
+        };
+      }
+
+      if (code) {
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        if (exchangeError) {
+          console.warn('[GoogleOAuth] code exchange error:', exchangeError);
+          return {
+            error: getAuthErrorMessage(
+              exchangeError,
+              'No pudimos completar el inicio de sesion con Google.',
+            ),
+          };
+        }
+      } else if (accessToken && refreshToken) {
+        const { error: setSessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (setSessionError) {
+          console.warn('[GoogleOAuth] set session error:', setSessionError);
+          return {
+            error: getAuthErrorMessage(
+              setSessionError,
+              'No pudimos completar el inicio de sesion con Google.',
+            ),
+          };
+        }
+      }
+
+      await refreshSession();
+      return { error: null };
+    }
+
+    console.warn('[GoogleOAuth] unexpected browser result', browserResult);
+    return {
+      error: 'No pudimos completar el inicio de sesion con Google. Intenta nuevamente.',
+    };
+  }, [refreshSession]);
+
+  const signInWithApple = useCallback(async (): Promise<AuthActionResult> => {
+    if (Platform.OS !== 'ios') {
+      return {
+        error: 'El inicio de sesion con Apple solo esta disponible en iOS.',
+      };
+    }
+
+    try {
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      
+      if (!isAvailable) {
+        return {
+          error: 'El inicio de sesion con Apple no esta disponible en este dispositivo.',
+        };
+      }
+
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        return {
+          error: 'No se recibio el token de identidad de Apple. Intenta nuevamente.',
+        };
+      }
+
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+
+      if (error) {
+        console.warn('[AppleOAuth] Supabase error:', error);
+        return {
+          error: getAuthErrorMessage(
+            error,
+            'No pudimos completar el inicio de sesion con Apple.',
+          ),
+        };
+      }
+
+      await refreshSession();
+      return { error: null };
+    } catch (error: any) {
+      if (error?.code === 'ERR_CANCELED') {
+        return { error: null };
+      }
+
+      console.warn('[AppleOAuth] Error:', error);
+      return {
+        error: 'No pudimos iniciar sesion con Apple. Intenta nuevamente.',
+      };
+    }
+  }, [refreshSession]);
 
   const signUp = useCallback(
     async ({ email, password, nombre }: SignUpParams): Promise<SignUpResult> => {
@@ -559,6 +700,7 @@ const value = useMemo<AuthContextType>(
       signIn,
       signUp,
       signInWithGoogle,
+      signInWithApple,
       signOut,
       resetPassword,
       updatePassword,
@@ -584,6 +726,7 @@ const value = useMemo<AuthContextType>(
       resetPassword,
       session,
       signIn,
+      signInWithApple,
       signInWithGoogle,
       signUp,
       signOut,

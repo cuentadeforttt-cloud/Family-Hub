@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Keyboard, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { AppLogo } from '../components/AppLogo';
 import { AuthScreenLayout } from '../components/AuthScreenLayout';
 import { AuthTextInput } from '../components/AuthTextInput';
@@ -49,13 +50,15 @@ const getGoogleErrorMessage = (message: string) => {
 };
 
 export const LoginScreen = ({ navigation }: Props) => {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn, signInWithGoogle, signInWithApple } = useAuth();
   const passwordInputRef = useRef<TextInput>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   const clearError = () => {
     if (errorMessage) {
@@ -129,6 +132,44 @@ const submitLogin = async () => {
 
     setGoogleLoading(false);
   };
+
+  const handleAppleSignIn = async () => {
+    if (appleLoading || !appleAvailable) {
+      return;
+    }
+
+    Keyboard.dismiss();
+    setErrorMessage(null);
+    setAppleLoading(true);
+
+    const result = await signInWithApple();
+
+    if (result.error) {
+      const normalized = result.error.toLowerCase();
+      if (
+        normalized.includes('dispositivo') ||
+        normalized.includes('disponible') ||
+        normalized.includes('solo')
+      ) {
+        setAppleAvailable(false);
+      } else {
+        void authErrorHaptic();
+        setErrorMessage('No pudimos iniciar sesion con Apple. Intenta nuevamente.');
+      }
+    }
+
+    setAppleLoading(false);
+  };
+
+  React.useEffect(() => {
+    if (Platform.OS === 'ios') {
+      void AppleAuthentication.isAvailableAsync().then((available) => {
+        setAppleAvailable(available);
+      }).catch(() => {
+        setAppleAvailable(false);
+      });
+    }
+  }, []);
 
   return (
     <AuthScreenLayout screenIndicator="01 - LOGIN" centerContent presentation="premium">
@@ -215,7 +256,27 @@ const submitLogin = async () => {
           accessibilityLabel="Recuperar contraseña"
         >
           <Text style={styles.forgotText}>Olvidé mi contraseña</Text>
-        </TouchableOpacity>
+</TouchableOpacity>
+
+        {Platform.OS === 'ios' && appleAvailable ? (
+          <TouchableOpacity
+            style={[styles.appleButton, appleLoading && styles.buttonDisabled]}
+            onPress={() => void handleAppleSignIn()}
+            disabled={appleLoading || loading || googleLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Continuar con Apple"
+          >
+            <View style={styles.appleButtonContent}>
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={12}
+                style={styles.appleButtonNative}
+                onPress={() => void handleAppleSignIn()}
+              />
+            </View>
+          </TouchableOpacity>
+        ) : null}
 
         <TouchableOpacity
           style={styles.linkButton}
@@ -277,4 +338,17 @@ linkText: { color: '#A86B45', fontSize: 14, fontWeight: '700', textAlign: 'cente
     justifyContent: 'center',
   },
   googleButtonText: { color: '#1A1714', fontSize: 15, fontWeight: '600' },
+  appleButton: {
+    width: '100%',
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  appleButtonContent: {
+    width: '100%',
+    alignItems: 'center',
+  },
+  appleButtonNative: {
+    width: '100%',
+    height: 48,
+  },
 });
