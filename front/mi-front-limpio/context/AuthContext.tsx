@@ -56,6 +56,7 @@ export type AuthContextType = {
   pendingJoinToken: string | null;
   signIn: (params: SignInParams) => Promise<AuthActionResult>;
   signUp: (params: SignUpParams) => Promise<SignUpResult>;
+  signInWithGoogle: () => Promise<AuthActionResult>;
   signOut: () => Promise<AuthActionResult>;
   resetPassword: (email: string) => Promise<AuthActionResult>;
   updatePassword: (password: string) => Promise<AuthActionResult>;
@@ -379,7 +380,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     void loadAuthMe(accessToken);
   }, [clearAuthMe, loadAuthMe, session?.access_token]);
 
-  const signIn = useCallback(async ({ email, password }: SignInParams): Promise<AuthActionResult> => {
+const signIn = useCallback(async ({ email, password }: SignInParams): Promise<AuthActionResult> => {
     try {
       const response = await authLogin({
         email: normalizeEmail(email),
@@ -402,6 +403,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       };
     }
   }, [loadAuthMe, persistBackendSession]);
+
+  const signInWithGoogle = useCallback(async (): Promise<AuthActionResult> => {
+    const redirectUrl = getAuthRedirectUrl();
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+      },
+    });
+
+    if (error) {
+      return {
+        error: getAuthErrorMessage(
+          error,
+          'No pudimos iniciar sesion con Google. Intenta nuevamente.',
+        ),
+      };
+    }
+
+    if (!data.url) {
+      return {
+        error: 'No pudimos iniciar el flujo de Google. Intenta nuevamente.',
+      };
+    }
+
+    return { error: null };
+  }, []);
 
   const signUp = useCallback(
     async ({ email, password, nombre }: SignUpParams): Promise<SignUpResult> => {
@@ -516,7 +545,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     await AsyncStorage.removeItem(PENDING_JOIN_KEY);
   }, []);
 
-  const value = useMemo<AuthContextType>(
+const value = useMemo<AuthContextType>(
     () => ({
       session,
       user,
@@ -529,6 +558,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       pendingJoinToken,
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
       resetPassword,
       updatePassword,
@@ -538,7 +568,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       clearPasswordRecovery,
       clearPendingJoinToken,
     }),
-    [
+[
       clearPasswordRecovery,
       clearPendingJoinToken,
       handleIncomingUrl,
@@ -554,8 +584,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       resetPassword,
       session,
       signIn,
-      signOut,
+      signInWithGoogle,
       signUp,
+      signOut,
       updatePassword,
       user,
     ],

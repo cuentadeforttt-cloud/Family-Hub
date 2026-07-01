@@ -27,12 +27,34 @@ const getLoginErrorMessage = (message: string) => {
   return 'No pudimos iniciar sesión. Revisá tu correo y contraseña.';
 };
 
+const getGoogleErrorMessage = (message: string) => {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes('network')
+    || normalized.includes('fetch')
+    || normalized.includes('conectar')
+  ) {
+    return 'No pudimos conectarnos. Probá de nuevo en unos segundos.';
+  }
+
+  if (
+    normalized.includes('cancelled')
+    || normalized.includes('cancel')
+  ) {
+    return null;
+  }
+
+  return 'No pudimos iniciar sesión con Google. Intentá nuevamente.';
+};
+
 export const LoginScreen = ({ navigation }: Props) => {
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogle } = useAuth();
   const passwordInputRef = useRef<TextInput>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const clearError = () => {
@@ -41,7 +63,7 @@ export const LoginScreen = ({ navigation }: Props) => {
     }
   };
 
-  const submitLogin = async () => {
+const submitLogin = async () => {
     if (loading) {
       return;
     }
@@ -84,6 +106,28 @@ export const LoginScreen = ({ navigation }: Props) => {
     }
 
     setLoading(false);
+  };
+
+  const handleGoogleSignIn = async () => {
+    if (googleLoading) {
+      return;
+    }
+
+    Keyboard.dismiss();
+    setErrorMessage(null);
+    setGoogleLoading(true);
+
+    const result = await signInWithGoogle();
+
+    if (result.error) {
+      const errorMessage = getGoogleErrorMessage(result.error);
+      if (errorMessage) {
+        void authErrorHaptic();
+        setErrorMessage(errorMessage);
+      }
+    }
+
+    setGoogleLoading(false);
   };
 
   return (
@@ -135,7 +179,7 @@ export const LoginScreen = ({ navigation }: Props) => {
           onSubmitEditing={() => void submitLogin()}
         />
 
-        {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+{errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
         <TouchableOpacity
           style={[styles.primaryButton, loading && styles.buttonDisabled]}
@@ -150,9 +194,23 @@ export const LoginScreen = ({ navigation }: Props) => {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
+          onPress={() => void handleGoogleSignIn()}
+          disabled={googleLoading || loading}
+          accessibilityRole="button"
+          accessibilityLabel="Continuar con Google"
+        >
+          <View style={styles.googleButtonContent}>
+            <Text style={styles.googleButtonText}>
+              {googleLoading ? 'Conectando...' : 'Continuar con Google'}
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.forgotButton}
           onPress={() => navigation.navigate('ForgotPassword')}
-          disabled={loading}
+          disabled={loading || googleLoading}
           accessibilityRole="button"
           accessibilityLabel="Recuperar contraseña"
         >
@@ -202,5 +260,21 @@ const styles = StyleSheet.create({
   forgotButton: { marginTop: 16, alignItems: 'center' },
   forgotText: { color: '#6B6560', fontSize: 14, fontWeight: '600' },
   linkButton: { marginTop: 24, alignItems: 'center' },
-  linkText: { color: '#A86B45', fontSize: 14, fontWeight: '700', textAlign: 'center' },
+linkText: { color: '#A86B45', fontSize: 14, fontWeight: '700', textAlign: 'center' },
+  googleButton: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#E0D8D0',
+  },
+  googleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  googleButtonText: { color: '#1A1714', fontSize: 15, fontWeight: '600' },
 });
