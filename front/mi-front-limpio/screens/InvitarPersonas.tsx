@@ -49,8 +49,8 @@ export const P03InvitarPersonas = ({ navigation, route }: Props) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const deepLink = activeInvitation
-    ? `familyhub://join?token=${activeInvitation.token}`
+const deepLink = activeInvitation
+    ? `homeplus://join?token=${activeInvitation.token}`
     : null;
 
   const loadRequests = useCallback(async () => {

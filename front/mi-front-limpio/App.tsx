@@ -8,7 +8,7 @@ import { AppNavigator } from './navigation/AppNavigator';
 import type { RootStackParamList } from './navigation/types';
 
 const linking: LinkingOptions<RootStackParamList> = {
-  prefixes: [Linking.createURL('/'), 'familyhub://'],
+  prefixes: [Linking.createURL('/')],
   config: {
     screens: {
       P00Splash: '',
