@@ -103,15 +103,36 @@ Para probar y validar:
    - Configurar en Apple Developer Portal
    - Asegurar que Supabase tenga Apple configurado como provider
 
+## Flujo final
+
+```
+Apple Sign In → identityToken → Supabase signInWithIdToken { provider: 'apple', token } 
+→ sesión Supabase → onAuthStateChange → loadAuthMe() → /api/auth/me
+```
+
+## Limitación importante
+
+**No se puede validar login Apple real desde Windows.**
+
+Requisitos para prueba real:
+- Dispositivo iOS real o simulator en Mac
+- EAS Build para iOS o Xcode con Mac
+- Configurar provider Apple en Supabase Dashboard (si no está activo)
+
 ## Estado
 
-**APPLE-001: DONE**
+**APPLE-002: DONE**
 
 - [x] Dependencia instalada
 - [x] Config en `app.json`
-- [x] `signInWithApple()` implementada
-- [x] BotÃ³n solo en iOS
-- [x] Manejo de errores
+- [x] `signInWithApple()` implementada completa
+- [x] Usa `signInWithIdToken` provider `apple`
+- [x] Botón solo en iOS (oculto en Android)
+- [x] Manejo de cancelación silencioso
+- [x] Manejo de errores sin pantalla roja
+- [x] Comentario TODO para fullName/email futuro
+- [x] try/finally en Login.tsx para appleLoading
+- [x] refreshSession() tras éxito
 - [x] Google OAuth intacto
 - [x] Email/password intacto
 - [x] Scheme `homeplus://` sin cambios
@@ -124,6 +145,23 @@ Para probar y validar:
 npx expo install expo-apple-authentication
 npx tsc --noEmit
 ```
+
+## Próximos pasos para validación
+
+1. **EAS Build iOS:**
+   ```bash
+   eas build --platform ios
+   ```
+   Instalar en iPhone y probar flujo completo.
+
+2. **Mac + Xcode:**
+   - Abrir proyecto en Mac
+   - Configurar signing/entitlements
+   - Ejecutar en simulator o dispositivo real
+
+3. **Supabase Dashboard:**
+   - Verificar que Apple provider esté activo
+   - Configurar Bundle ID correcto
 
 ## Referencias
 

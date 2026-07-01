@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Keyboard, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Keyboard, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Image } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { AppLogo } from '../components/AppLogo';
@@ -8,6 +8,7 @@ import { AuthTextInput } from '../components/AuthTextInput';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
 import { authErrorHaptic, authSuccessHaptic } from '../utils/haptics';
+import googleLogo from '../assets/google-logo.svg';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -142,23 +143,25 @@ const submitLogin = async () => {
     setErrorMessage(null);
     setAppleLoading(true);
 
-    const result = await signInWithApple();
+    try {
+      const result = await signInWithApple();
 
-    if (result.error) {
-      const normalized = result.error.toLowerCase();
-      if (
-        normalized.includes('dispositivo') ||
-        normalized.includes('disponible') ||
-        normalized.includes('solo')
-      ) {
-        setAppleAvailable(false);
-      } else {
-        void authErrorHaptic();
-        setErrorMessage('No pudimos iniciar sesion con Apple. Intenta nuevamente.');
+      if (result.error) {
+        const normalized = result.error.toLowerCase();
+        if (
+          normalized.includes('dispositivo') ||
+          normalized.includes('disponible') ||
+          normalized.includes('solo')
+        ) {
+          setAppleAvailable(false);
+        } else {
+          void authErrorHaptic();
+          setErrorMessage('No pudimos iniciar sesion con Apple. Intenta nuevamente.');
+        }
       }
+    } finally {
+      setAppleLoading(false);
     }
-
-    setAppleLoading(false);
   };
 
   React.useEffect(() => {
@@ -241,11 +244,10 @@ const submitLogin = async () => {
           accessibilityRole="button"
           accessibilityLabel="Continuar con Google"
         >
-          <View style={styles.googleButtonContent}>
-            <Text style={styles.googleButtonText}>
-              {googleLoading ? 'Conectando...' : 'Continuar con Google'}
-            </Text>
-          </View>
+          <Image source={googleLogo} style={styles.googleIcon} resizeMode="contain" />
+          <Text style={styles.googleButtonText}>
+            {googleLoading ? 'Conectando con Google...' : 'Continuar con Google'}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -325,17 +327,25 @@ linkText: { color: '#A86B45', fontSize: 14, fontWeight: '700', textAlign: 'cente
   googleButton: {
     backgroundColor: '#FFFFFF',
     width: '100%',
-    paddingVertical: 14,
+    height: 52,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#E0D8D0',
+    borderColor: '#E8E3DC',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+    position: 'relative',
   },
-  googleButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  googleIcon: {
+    position: 'absolute',
+    left: 20,
+    width: 20,
+    height: 20,
   },
   googleButtonText: { color: '#1A1714', fontSize: 15, fontWeight: '600' },
   appleButton: {

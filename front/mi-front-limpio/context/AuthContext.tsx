@@ -434,13 +434,25 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
   const signInWithGoogle = useCallback(async (): Promise<AuthActionResult> => {
     const redirectUrl = getAuthRedirectUrl();
 
+    if (!redirectUrl || redirectUrl.startsWith('file://')) {
+      return {
+        error: 'Configuración de autenticación inválida. Contacta al soporte.',
+      };
+    }
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
         skipBrowserRedirect: true,
+        queryParams: {
+          prompt: 'select_account',
+        },
       },
     });
+
+    console.log('[GoogleOAuth] data.url', data?.url);
+    console.log('[GoogleOAuth] typeof data.url', typeof data?.url);
 
     if (error) {
       return {
@@ -452,9 +464,20 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
     }
 
     if (!data?.url) {
-      console.warn('[GoogleOAuth] no URL returned from Supabase');
       return {
         error: 'No pudimos iniciar el flujo de Google. Intenta nuevamente.',
+      };
+    }
+
+    if (data.url.startsWith('file://')) {
+      return {
+        error: 'Error interno en el flujo de Google. Intenta nuevamente.',
+      };
+    }
+
+    if (!data.url.startsWith('https://')) {
+      return {
+        error: 'Error interno en el flujo de Google. Intenta nuevamente.',
       };
     }
 
@@ -472,7 +495,6 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
       const { code, accessToken, refreshToken, errorCode, errorDescription } = parseAuthUrl(browserResult.url);
 
       if (errorCode || errorDescription) {
-        console.warn('[GoogleOAuth] OAuth error from browser:', errorDescription);
         return {
           error: errorDescription || 'Error al autenticar con Google.',
         };
@@ -481,7 +503,6 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
       if (code) {
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         if (exchangeError) {
-          console.warn('[GoogleOAuth] code exchange error:', exchangeError);
           return {
             error: getAuthErrorMessage(
               exchangeError,
@@ -495,7 +516,6 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
           refresh_token: refreshToken,
         });
         if (setSessionError) {
-          console.warn('[GoogleOAuth] set session error:', setSessionError);
           return {
             error: getAuthErrorMessage(
               setSessionError,
@@ -509,7 +529,6 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
       return { error: null };
     }
 
-    console.warn('[GoogleOAuth] unexpected browser result', browserResult);
     return {
       error: 'No pudimos completar el inicio de sesion con Google. Intenta nuevamente.',
     };
@@ -544,6 +563,8 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
         };
       }
 
+      // TODO: Si Apple devuelve fullName.email, sincronizar con backend en futuro perfil
+      // Apple solo devuelve email/fullName la primera vez, no depender obligatoriamente
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: credential.identityToken,
