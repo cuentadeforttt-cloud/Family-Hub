@@ -21,8 +21,10 @@ const HouseholdContext = createContext<HouseholdContextType | undefined>(undefin
 const mapRole = (role: AuthMeMembership['role']): HouseholdMember['rol'] | null => {
   if (role === 'coordinator') return 'coordinador';
   if (role === 'adult') return 'adulto';
-  if (role === 'adolescent' || role === 'child' || role === 'guest') return 'adolescente';
+  if (role === 'adolescent') return 'adolescente';
+  if (role === 'child') return 'adolescente';
   if (role === 'senior') return 'adulto_mayor';
+  if (role === 'guest') return 'adulto';
   return null;
 };
 
@@ -92,7 +94,7 @@ export const HouseholdProvider = ({ children }: { children: React.ReactNode }) =
     }];
   }, [activeMembership, authMe?.person, currentHousehold, currentRole, user]);
 
-  const loadMembers = useCallback(async () => {
+const loadMembers = useCallback(async () => {
     if (!currentHousehold) {
       setMembers([]);
       setMembersError(null);
@@ -107,6 +109,10 @@ export const HouseholdProvider = ({ children }: { children: React.ReactNode }) =
       .order('joined_at', { ascending: true });
 
     if (error) {
+      console.warn(
+        '[HouseholdContext] Error cargando miembros desde household_people_public, usando fallback:',
+        error,
+      );
       setMembers(fallbackMembers);
       setMembersError('No pudimos cargar los miembros del hogar.');
       return;
@@ -126,6 +132,12 @@ export const HouseholdProvider = ({ children }: { children: React.ReactNode }) =
           avatar_url: member.avatar_url,
         },
       }));
+
+    if (mappedMembers.length === 0) {
+      console.warn(
+        '[HouseholdContext] household_people_public devolvió 0 miembros, usando fallback con solo el usuario actual.',
+      );
+    }
 
     setMembers(mappedMembers.length > 0 ? mappedMembers : fallbackMembers);
     setMembersError(null);

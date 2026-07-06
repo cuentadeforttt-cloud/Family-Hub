@@ -1,35 +1,63 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
-  Alert,
+  Modal,
   ScrollView,
   StyleSheet,
-  Switch,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { useHousehold } from '../context/HouseholdContext';
+import { updatePeopleMe, type UpdatePeoplePayload, getUserHouseholds } from '../services/api';
+import { normalizeUserHouseholds } from '../utils/householdUtils';
+import { AppScreen } from '../components/ui/AppScreen';
+import { AppCard } from '../components/ui/AppCard';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { AppInput } from '../components/ui/AppInput';
 import { HomePlusIcon } from '../constants/icons';
-import { colors } from '../constants/theme';
+import {
+  colors,
+  typography,
+  spacing,
+  radius,
+  shadows,
+} from '../constants/theme';
+import type { UserHousehold } from '../services/api';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const ROL_DISPLAY: Record<string, string> = {
-  coordinador: 'Coordinador del hogar',
-  adulto: 'Adulto',
-  adolescente: 'Adolescente',
-  adulto_mayor: 'Adulto mayor',
+const ROLE_LABELS: Record<string, string> = {
+  coordinator: 'Coordinador',
+  adult: 'Adulto',
+  adolescent: 'Adolescente',
+  senior: 'Adulto mayor',
+  child: 'Niño',
+  guest: 'Invitado',
 };
 
-const ROL_COLORS: Record<string, string> = {
-  coordinador: '#CD7353',
-  adulto: '#7C9E7A',
-  adolescente: '#6B4FE8',
-  adulto_mayor: '#D4975A',
+const ROLE_BG: Record<string, { bg: string; text: string }> = {
+  coordinator: { bg: colors.terracotta[50], text: colors.terracotta[600] },
+  adult: { bg: colors.sage[50], text: colors.sage[600] },
+  adolescent: { bg: colors.info.soft, text: colors.info.text },
+  senior: { bg: colors.sand[50], text: colors.sand[600] },
+  child: { bg: colors.sage[50], text: colors.sage[600] },
+  guest: { bg: colors.surface.soft, text: colors.text.tertiary },
 };
 
-const AVATAR_BG_COLORS = ['#CD7353', '#6B4FE8', '#7C9E7A', '#D4975A', '#E57373', '#64B5F6'];
+const STATUS_LABELS: Record<string, string> = {
+  active: 'Activo',
+  pending: 'Pendiente',
+  finalized: 'Finalizado',
+  suspended: 'Suspendido',
+};
+
+const AVATAR_BG_COLORS = [
+  colors.terracotta[500],
+  'rgb(107,79,232)',
+  colors.sage[500],
+  colors.sand[500],
+  'rgb(229,115,115)',
+  'rgb(100,181,246)',
+];
 
 function getInitials(name: string): string {
   const parts = name.trim().split(' ');
@@ -37,413 +65,579 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-function getAvatarColor(name: string): string {
+function getAvatarBg(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
   return AVATAR_BG_COLORS[Math.abs(hash) % AVATAR_BG_COLORS.length];
 }
 
-function formatMemberSince(isoDate: string): string {
-  const d = new Date(isoDate);
-  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
+function yyyymmddToDisplay(iso: string): string {
+  if (!iso || iso.length !== 10) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function displayToYyyymmdd(display: string): string | null {
+  const trimmed = display.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split('/');
+  if (parts.length !== 3) return null;
+  const [d, m, y] = parts;
+  if (!d || !m || !y || d.length !== 2 || m.length !== 2 || y.length !== 4) return null;
+  return `${y}-${m}-${d}`;
+}
+
+function humanBirthday(iso: string): string {
+  if (!iso) return 'Agregar cumpleaños';
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'long' });
+}
+
+function displayLabel(value: string | null | undefined, fallback: string): string {
+  if (!value || value.trim().length === 0) return fallback;
+  return value;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
+
 export const ProfileScreen = () => {
-  const { user, signOut } = useAuth();
-  const { currentHousehold, currentRole, isCoordinator, members } = useHousehold();
+  const navigation = useNavigation<any>();
+  const { user, session, signOut, authMe, refetchMe } = useAuth();
+  const [households, setHouseholds] = useState<UserHousehold[]>([]);
+  const [loadingHouseholds, setLoadingHouseholds] = useState(false);
 
-  // Settings toggles (UI only — not persisted yet)
-  const [notifEnabled, setNotifEnabled] = useState(true);
-  const [privacyEnabled, setPrivacyEnabled] = useState(false);
-  const [inviteTab, setInviteTab] = useState<'admin' | 'miembros'>('admin');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const myName = user?.user_metadata?.nombre ?? 'Usuario';
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editFirstName, setEditFirstName] = useState('');
+  const [editLastName, setEditLastName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editDateOfBirthDisplay, setEditDateOfBirthDisplay] = useState('');
+
+  const person = authMe?.person;
+  const activeHouseholdId = authMe?.active_household?.id;
+
+  React.useEffect(() => {
+    void loadHouseholds();
+  }, [authMe]);
+
+  const loadHouseholds = useCallback(async () => {
+    if (!session?.access_token) return;
+    setLoadingHouseholds(true);
+    try {
+      const response = await getUserHouseholds(session.access_token);
+      const rawHouseholds = response.households ?? [];
+      console.log('[H042.3I][ProfileHomes] raw', rawHouseholds)
+      const normalized = normalizeUserHouseholds(rawHouseholds, activeHouseholdId);
+      console.log('[H042.3I][ProfileHomes] normalized', normalized)
+      setHouseholds(normalized);
+    } catch (error) {
+      console.error('[ProfileScreen] Error cargando hogares:', error);
+    } finally {
+      setLoadingHouseholds(false);
+    }
+  }, [session, activeHouseholdId]);
+
+  const handleBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
+
+  const myName = person?.display_name ?? user?.user_metadata?.nombre ?? 'Usuario';
   const myInitials = getInitials(myName);
-  const myAvatarColor = getAvatarColor(myName);
+  const myAvatarBg = getAvatarBg(myName);
   const myEmail = user?.email ?? '—';
-  const memberSince = user?.created_at ? formatMemberSince(user.created_at) : '—';
+  const myPhone = person?.phone ?? null;
+  const myDateOfBirth = person?.date_of_birth ?? null;
+  const myFirstName = person?.first_name ?? null;
+  const myLastName = person?.last_name ?? null;
 
-  const accentColor = ROL_COLORS[currentRole ?? ''] ?? '#CD7353';
-  const rolLabel = ROL_DISPLAY[currentRole ?? ''] ?? (currentRole ?? '—');
+  const openEditModal = useCallback(() => {
+    setEditDisplayName(person?.display_name ?? '');
+    setEditFirstName(person?.first_name ?? '');
+    setEditLastName(person?.last_name ?? '');
+    setEditPhone(person?.phone ?? '');
+    setEditDateOfBirthDisplay(person?.date_of_birth ? yyyymmddToDisplay(person.date_of_birth) : '');
+    setFieldErrors({});
+    setShowEditModal(true);
+  }, [person]);
 
-  const handleSignOut = () => {
-    Alert.alert(
-      'Cerrar sesión',
-      '¿Estás seguro que quieres cerrar sesión?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Salir', style: 'destructive', onPress: () => void signOut() },
-      ],
-    );
-  };
+  const closeEditModal = useCallback(() => {
+    setShowEditModal(false);
+    setFieldErrors({});
+  }, []);
 
+  const validateFields = useCallback((): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!editDisplayName.trim()) {
+      errors.display_name = 'El nombre visible es obligatorio';
+    }
+
+    if (editPhone.trim() && editPhone.trim().length < 7) {
+      errors.phone = 'Revisá el número de teléfono';
+    }
+
+    if (editDateOfBirthDisplay.trim()) {
+      const converted = displayToYyyymmdd(editDateOfBirthDisplay);
+      if (!converted) {
+        errors.date_of_birth = 'Usá el formato DD/MM/AAAA';
+      } else {
+        const birthDate = new Date(converted + 'T00:00:00');
+        const today = new Date();
+        const age = today.getFullYear() - birthDate.getFullYear();
+        if (isNaN(birthDate.getTime()) || age < 0 || age > 120) {
+          errors.date_of_birth = 'Usá el formato DD/MM/AAAA';
+        }
+      }
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }, [editDisplayName, editPhone, editDateOfBirthDisplay]);
+
+  const handleSaveProfile = useCallback(async () => {
+    if (!session?.access_token) {
+      setFieldErrors({ general: 'No hay sesión activa. Intenta cerrar y volver a iniciar.' });
+      return;
+    }
+
+    if (!validateFields()) return;
+
+    setEditing(true);
+
+    let finalDateOfBirth: string | null = null;
+    if (editDateOfBirthDisplay.trim()) {
+      finalDateOfBirth = displayToYyyymmdd(editDateOfBirthDisplay);
+    }
+
+    const payload: UpdatePeoplePayload = {
+      display_name: editDisplayName.trim(),
+      first_name: editFirstName.trim() || null,
+      last_name: editLastName.trim() || null,
+      phone: editPhone.trim() || null,
+      date_of_birth: finalDateOfBirth,
+    };
+
+    try {
+      await updatePeopleMe(session.access_token, payload);
+      await refetchMe();
+      closeEditModal();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No pudimos guardar tus cambios.';
+      setFieldErrors({ general: message });
+    } finally {
+      setEditing(false);
+    }
+  }, [session, editDisplayName, editFirstName, editLastName, editPhone, editDateOfBirthDisplay, validateFields, refetchMe, closeEditModal]);
+
+  const handleSignOut = useCallback(() => {
+    signOut();
+  }, [signOut]);
+
+  // ── Helper row component ────────────────────────────────────────────────
+  const ProfileRow = ({
+    label,
+    value,
+    placeholder,
+  }: {
+    label: string;
+    value: string;
+    placeholder?: string;
+  }) => (
+    <View style={S.infoRow}>
+      <AppText variant="micro" tone="muted" style={{ textTransform: 'uppercase', letterSpacing: 0.4 }}>
+        {label}
+      </AppText>
+      <AppText variant="bodySmall" tone={value === placeholder ? 'tertiary' : 'primary'} weight="500">
+        {value}
+      </AppText>
+    </View>
+  );
+
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={S.safe} edges={['top']}>
-      <ScrollView
-        style={S.scroll}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {/* ── Header bar ──────────────────────────────────────────────── */}
-        <View style={S.headerBar}>
-          <Text style={S.headerTitle}>Mi Perfil</Text>
-          {currentHousehold && (
-            <View style={S.grupoChip}>
-              <Text style={S.grupoChipText}>🏠 {currentHousehold.nombre}</Text>
-            </View>
-          )}
-        </View>
+    <AppScreen scroll padded background="base" bottomInset="none">
+      {/* Header simple */}
+      <View style={S.header}>
+        <TouchableOpacity
+          onPress={handleBack}
+          style={S.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Volver"
+        >
+          <HomePlusIcon name="arrow-back" size={24} color={colors.text.primary} />
+        </TouchableOpacity>
+        <AppText variant="title3" weight="800">
+          Perfil
+        </AppText>
+      </View>
 
-        {/* ── Avatar + identity ───────────────────────────────────────── */}
-        <View style={S.avatarSection}>
-          <View style={[S.avatarCircle, { backgroundColor: myAvatarColor }]}>
-            <Text style={S.avatarText}>{myInitials}</Text>
+      {/* ── Hero Card ──────────────────────────────────────────────────── */}
+      <AppCard variant="elevated" padding="generous" style={{ marginBottom: spacing[4] }}>
+        <View style={{ alignItems: 'center', gap: spacing[3] }}>
+          {/* Avatar */}
+          <View
+            style={[
+              {
+                width: 80,
+                height: 80,
+                borderRadius: radius.pill,
+                backgroundColor: myAvatarBg,
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+              shadows.card,
+            ]}
+          >
+            <AppText variant="title2" tone="inverse" weight="800">
+              {myInitials}
+            </AppText>
           </View>
-          <Text style={S.userName}>{myName}</Text>
-          <View style={[S.roleBadge, { backgroundColor: accentColor + '18' }]}>
-            <Text style={[S.roleBadgeText, { color: accentColor }]}>{rolLabel}</Text>
+
+          {/* Name */}
+          <AppText variant="title3" weight="800" align="center">
+            {myName}
+          </AppText>
+
+          {/* Email */}
+          <AppText variant="bodySmall" tone="tertiary" align="center">
+            {myEmail}
+          </AppText>
+        </View>
+      </AppCard>
+
+      {/* ── Datos personales ────────────────────────────────────────────── */}
+      <AppCard variant="default" padding="default" style={{ marginBottom: spacing[4] }}>
+        <AppText variant="caption" weight="700" tone="secondary" style={{ marginBottom: spacing[3], textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Datos personales
+        </AppText>
+
+        <ProfileRow label="Nombre visible" value={myName} />
+        <ProfileRow label="Nombre" value={displayLabel(myFirstName, 'Sin completar')} placeholder="Sin completar" />
+        <ProfileRow label="Apellido" value={displayLabel(myLastName, 'Sin completar')} placeholder="Sin completar" />
+        <ProfileRow label="Teléfono" value={displayLabel(myPhone, 'Agregar teléfono')} placeholder="Agregar teléfono" />
+        <ProfileRow label="Cumpleaños" value={humanBirthday(myDateOfBirth ?? '')} placeholder="Agregar cumpleaños" />
+
+        <AppButton
+          title="Editar perfil"
+          variant="secondary"
+          size="sm"
+          onPress={openEditModal}
+          style={{ marginTop: spacing[3], alignSelf: 'flex-start' }}
+        />
+      </AppCard>
+
+      {/* ── Hogares ─────────────────────────────────────────────────────── */}
+      <AppCard variant="default" padding="default" style={{ marginBottom: spacing[4] }}>
+        <AppText variant="caption" weight="700" tone="secondary" style={{ marginBottom: spacing[3], textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Hogares
+        </AppText>
+
+        {loadingHouseholds ? (
+          <View style={{ paddingVertical: spacing[4], alignItems: 'center' }}>
+            <AppText variant="bodySmall" tone="tertiary">Cargando hogares...</AppText>
           </View>
-          <TouchableOpacity onPress={() => Alert.alert('Editar perfil', 'Próximamente.')}>
-            <Text style={[S.editProfileLink, { color: accentColor }]}>Editar perfil</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Stats row ───────────────────────────────────────────────── */}
-        <View style={S.statsRow}>
-          {[
-            { value: '147', label: 'Actividades' },
-            { value: '38',  label: 'Racha' },
-            { value: '12',  label: 'Logros' },
-          ].map((stat, i) => (
-            <React.Fragment key={stat.label}>
-              <View style={S.statItem}>
-                <Text style={[S.statValue, { color: accentColor }]}>{stat.value}</Text>
-                <Text style={S.statLabel}>{stat.label}</Text>
-              </View>
-              {i < 2 && <View style={S.statDivider} />}
-            </React.Fragment>
-          ))}
-        </View>
-
-        {/* ── Info cards ──────────────────────────────────────────────── */}
-        <View style={S.section}>
-          <InfoRow icon={<HomePlusIcon name="mail" size={20} color="#888888" />} label="Email" value={myEmail} />
-          <InfoRow icon={<HomePlusIcon name="calendar" size={20} color="#888888" />} label="Miembro desde" value={memberSince} />
-          {currentHousehold && (
-            <InfoRow icon={<HomePlusIcon name="home" size={20} color="#888888" />} label="Hogar" value={currentHousehold.nombre} />
-          )}
-        </View>
-
-        {/* ── Mi familia ──────────────────────────────────────────────── */}
-        <View style={S.sectionHeader}>
-          <View style={S.sectionTitleRow}>
-            <HomePlusIcon name="people" size={20} color={accentColor} />
-            <Text style={S.sectionTitle}>Mi familia</Text>
+        ) : households.length === 0 ? (
+          <View style={{ paddingVertical: spacing[4] }}>
+            <AppText variant="bodySmall" tone="tertiary">No estás en ningún hogar todavía.</AppText>
           </View>
-          <Text style={S.sectionCount}>{members.length} miembros</Text>
-        </View>
-        <View style={S.section}>
-          {members.length === 0 ? (
-            <Text style={S.emptyText}>No hay miembros en el hogar aún.</Text>
-          ) : (
-            members.map(m => {
-              const mName = m.user?.nombre ?? 'Miembro';
-              const mInitials = getInitials(mName);
-              const mColor = getAvatarColor(mName);
-              const mRolColor = ROL_COLORS[m.rol] ?? '#888888';
+        ) : (
+          <View style={{ gap: spacing[2] }}>
+            {households.slice(0, 3).map((h) => {
+              const roleInfo = ROLE_LABELS[h.role] ?? h.role;
+              const statusInfo = h.status ? STATUS_LABELS[h.status] : null;
+              const isCurrent = h.household_id === activeHouseholdId;
+              const roleBg = ROLE_BG[h.role] ?? { bg: colors.surface.soft, text: colors.text.tertiary };
+
               return (
-                <View key={m.id} style={S.memberRow}>
-                  <View style={[S.memberAvatar, { backgroundColor: mColor }]}>
-                    <Text style={S.memberAvatarText}>{mInitials}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={S.memberName}>{mName}</Text>
-                    <Text style={[S.memberRole, { color: mRolColor }]}>
-                      {ROL_DISPLAY[m.rol] ?? m.rol}
-                    </Text>
-                  </View>
-                  {m.user_id === user?.id && (
-                    <View style={[S.youBadge, { backgroundColor: accentColor + '18' }]}>
-                      <Text style={[S.youBadgeText, { color: accentColor }]}>Tú</Text>
+                <View key={h.household_id} style={S.householdRow}>
+                  <View style={S.householdInfo}>
+                    <View style={S.householdNameRow}>
+                      <AppText variant="bodySmall" weight="700">
+                        {h.household_name}
+                      </AppText>
+                      {isCurrent && (
+                        <View style={S.activeBadge}>
+                          <AppText variant="micro" tone="success" weight="700">
+                            Actual
+                          </AppText>
+                        </View>
+                      )}
                     </View>
-                  )}
+                    <View style={S.roleRow}>
+                      <View
+                        style={[
+                          S.roleChip,
+                          { backgroundColor: roleBg.bg, borderColor: roleBg.bg },
+                        ]}
+                      >
+                        <AppText variant="micro" style={{ color: roleBg.text, fontWeight: '600' }}>
+                          {roleInfo}
+                        </AppText>
+                      </View>
+                      {statusInfo && (
+                        <AppText variant="micro" tone="tertiary" style={{ marginLeft: spacing[2] }}>
+                          · {statusInfo}
+                        </AppText>
+                      )}
+                    </View>
+                  </View>
                 </View>
               );
-            })
-          )}
-        </View>
-
-        {/* ── Configuración ───────────────────────────────────────────── */}
-        <View style={S.sectionHeader}>
-          <View style={S.sectionTitleRow}>
-            <HomePlusIcon name="settings" size={20} color={accentColor} />
-            <Text style={S.sectionTitle}>Configuración</Text>
-          </View>
-        </View>
-        <View style={S.section}>
-          <View style={S.settingRow}>
-            <HomePlusIcon name="notifications" size={22} color="#888888" />
-            <View style={{ flex: 1 }}>
-              <Text style={S.settingLabel}>Notificaciones</Text>
-              <Text style={S.settingDesc}>Alertas del hogar y eventos</Text>
+            })}
             </View>
-            <Switch
-              value={notifEnabled}
-              onValueChange={setNotifEnabled}
-              trackColor={{ false: '#E2DFD6', true: accentColor }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-          <View style={[S.settingRow, S.settingRowBorder]}>
-            <HomePlusIcon name="shield-checkmark" size={22} color="#888888" />
-            <View style={{ flex: 1 }}>
-              <Text style={S.settingLabel}>Privacidad y seguridad</Text>
-              <Text style={S.settingDesc}>Datos y contraseña</Text>
-            </View>
-            <TouchableOpacity onPress={() => Alert.alert('Privacidad', 'Próximamente.')}>
-              <Text style={S.chevron}>›</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={[S.settingRow, S.settingRowBorder]}>
-            <HomePlusIcon name="color-palette" size={22} color="#888888" />
-            <View style={{ flex: 1 }}>
-              <Text style={S.settingLabel}>Apariencia</Text>
-              <Text style={S.settingDesc}>Tema y preferencias</Text>
-            </View>
-            <TouchableOpacity onPress={() => Alert.alert('Apariencia', 'Próximamente.')}>
-              <Text style={S.chevron}>›</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ── Área de invitación (solo coordinador) ───────────────────── */}
-        {isCoordinator && (
-          <>
-            <View style={S.sectionHeader}>
-              <View style={S.sectionTitleRow}>
-                <HomePlusIcon name="person-add" size={20} color={accentColor} />
-                <Text style={S.sectionTitle}>Área de invitación</Text>
-              </View>
-            </View>
-            <View style={S.section}>
-              {/* Admin / Miembros toggle */}
-              <View style={S.inviteToggle}>
-                <TouchableOpacity
-                  style={[S.inviteTabBtn, inviteTab === 'admin' && S.inviteTabBtnActive]}
-                  onPress={() => setInviteTab('admin')}
-                >
-                  <Text style={[S.inviteTabText, inviteTab === 'admin' && S.inviteTabTextActive]}>
-                    Administradores
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[S.inviteTabBtn, inviteTab === 'miembros' && S.inviteTabBtnActive]}
-                  onPress={() => setInviteTab('miembros')}
-                >
-                  <Text style={[S.inviteTabText, inviteTab === 'miembros' && S.inviteTabTextActive]}>
-                    Miembros ({members.length})
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {inviteTab === 'admin' ? (
-                <View style={S.inviteInfoBox}>
-                  <Text style={S.inviteInfoText}>
-                    👑 Como coordinador puedes gestionar el hogar, invitar nuevos miembros y configurar los permisos de cada integrante.
-                  </Text>
-                  <TouchableOpacity
-                    style={[S.inviteActionBtn, { backgroundColor: accentColor }]}
-                    onPress={() => Alert.alert('Invitar', 'Ve a Configuración → Invitar personas para generar un enlace QR.')}
-                  >
-                    <Text style={S.inviteActionBtnText}>Invitar personas</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View>
-                  {members.map(m => {
-                    const mName = m.user?.nombre ?? 'Miembro';
-                    const mInitials = getInitials(mName);
-                    const mColor = getAvatarColor(mName);
-                    return (
-                      <View key={m.id} style={S.memberRow}>
-                        <View style={[S.memberAvatar, { backgroundColor: mColor }]}>
-                          <Text style={S.memberAvatarText}>{mInitials}</Text>
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={S.memberName}>{mName}</Text>
-                          <Text style={[S.memberRole, { color: ROL_COLORS[m.rol] ?? '#888' }]}>
-                            {ROL_DISPLAY[m.rol] ?? m.rol}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-          </>
         )}
 
-        {/* ── Cerrar sesión ───────────────────────────────────────────── */}
-        <TouchableOpacity style={S.signOutBtn} onPress={handleSignOut}>
-          <Text style={S.signOutText}>Cerrar sesión</Text>
-        </TouchableOpacity>
+        {households.length > 3 && (
+          <AppText variant="micro" tone="tertiary" align="center" style={{ marginTop: spacing[2] }}>
+            + {households.length - 3} hogares más
+          </AppText>
+        )}
+      </AppCard>
 
-      </ScrollView>
-    </SafeAreaView>
+      {/* ── Cuenta ──────────────────────────────────────────────────────── */}
+      <AppCard variant="default" padding="default" style={{ marginBottom: spacing[4] }}>
+        <AppText variant="caption" weight="700" tone="secondary" style={{ marginBottom: spacing[3], textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Cuenta
+        </AppText>
+
+        <ProfileRow label="Email" value={myEmail} />
+
+        <AppButton
+          title="Cerrar sesión"
+          variant="danger"
+          size="sm"
+          onPress={handleSignOut}
+          style={{ marginTop: spacing[4], alignSelf: 'flex-start' }}
+        />
+      </AppCard>
+
+      {/* ── Edit Profile Modal ──────────────────────────────────────────── */}
+      <Modal
+        visible={showEditModal}
+        animationType="slide"
+        transparent
+        onRequestClose={closeEditModal}
+      >
+        <View style={S.modalOverlay}>
+          <View style={S.modalSheet}>
+            {/* Header */}
+            <View style={S.modalHeader}>
+              <View style={S.modalHandle} />
+              <AppText variant="title3" weight="800" align="center" style={{ marginBottom: spacing[1] }}>
+                Editar perfil
+              </AppText>
+              <AppText variant="bodySmall" tone="tertiary" align="center">
+                Actualizá cómo te ven en tu hogar
+              </AppText>
+            </View>
+
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingHorizontal: spacing[5], paddingBottom: spacing[6] }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Avatar preview */}
+              <View style={{ alignItems: 'center', marginBottom: spacing[5] }}>
+                <View
+                  style={{
+                    width: 64,
+                    height: 64,
+                    borderRadius: radius.pill,
+                    backgroundColor: myAvatarBg,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: spacing[2],
+                  }}
+                >
+                  <AppText variant="title3" tone="inverse" weight="800">
+                    {myInitials}
+                  </AppText>
+                </View>
+              </View>
+
+              {/* General error */}
+              {fieldErrors.general ? (
+                <View style={S.errorBox}>
+                  <AppText variant="bodySmall" tone="danger">
+                    {fieldErrors.general}
+                  </AppText>
+                </View>
+              ) : null}
+
+              {/* Nombre visible * */}
+              <AppInput
+                label="Nombre visible *"
+                value={editDisplayName}
+                onChangeText={setEditDisplayName}
+                placeholder="Tu nombre en el hogar"
+                autoCapitalize="words"
+                errorText={fieldErrors.display_name}
+                containerStyle={{ marginBottom: spacing[3] }}
+              />
+
+              {/* Nombre */}
+              <AppInput
+                label="Nombre"
+                value={editFirstName}
+                onChangeText={setEditFirstName}
+                placeholder="Tu nombre de pila"
+                autoCapitalize="words"
+                containerStyle={{ marginBottom: spacing[3] }}
+              />
+
+              {/* Apellido */}
+              <AppInput
+                label="Apellido"
+                value={editLastName}
+                onChangeText={setEditLastName}
+                placeholder="Tu apellido"
+                autoCapitalize="words"
+                containerStyle={{ marginBottom: spacing[3] }}
+              />
+
+              {/* Teléfono */}
+              <AppInput
+                label="Teléfono"
+                value={editPhone}
+                onChangeText={setEditPhone}
+                placeholder="+54 11 1234 5678"
+                keyboardType="phone-pad"
+                errorText={fieldErrors.phone}
+                containerStyle={{ marginBottom: spacing[3] }}
+              />
+
+              {/* Cumpleaños */}
+              <AppInput
+                label="Cumpleaños"
+                value={editDateOfBirthDisplay}
+                onChangeText={setEditDateOfBirthDisplay}
+                placeholder="DD/MM/AAAA"
+                keyboardType="numbers-and-punctuation"
+                errorText={fieldErrors.date_of_birth}
+                helperText={!fieldErrors.date_of_birth ? 'Formato: día/mes/año' : undefined}
+                containerStyle={{ marginBottom: spacing[3] }}
+              />
+
+              {/* Buttons */}
+              <View style={{ flexDirection: 'row', gap: spacing[3], marginTop: spacing[4] }}>
+                <View style={{ flex: 1 }}>
+                  <AppButton
+                    title="Cancelar"
+                    variant="ghost"
+                    onPress={closeEditModal}
+                    disabled={editing}
+                    size="md"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppButton
+                    title="Guardar cambios"
+                    variant="primary"
+                    onPress={handleSaveProfile}
+                    loading={editing}
+                    disabled={editing}
+                    size="md"
+                  />
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </AppScreen>
   );
 };
 
-// ─── InfoRow helper ───────────────────────────────────────────────────────────
-function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <View style={S.infoRow}>
-      <View style={S.infoIconWrapper}>{icon}</View>
-      <View style={{ flex: 1 }}>
-        <Text style={S.infoLabel}>{label}</Text>
-        <Text style={S.infoValue} numberOfLines={1}>{value}</Text>
-      </View>
-    </View>
-  );
-}
+// ─── Styles (solo para lo que tokens no cubren automáticamente) ────────────────
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const S = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FAFAF8' },
-  scroll: { flex: 1 },
-
-  // Header bar
-  headerBar: {
+  infoRow: {
+    paddingVertical: spacing[3],
+    gap: spacing[1],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.subtle,
+  },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
+    gap: spacing[3],
+    marginBottom: spacing[4],
   },
-  headerTitle: { fontSize: 22, fontWeight: '800', color: '#1C1C1C' },
-  grupoChip: {
-    backgroundColor: '#F0EDE8',
-    borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12,
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface.soft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.default,
   },
-  grupoChipText: { fontSize: 12, fontWeight: '600', color: '#888888' },
-
-  // Section headers with icons
-  sectionTitleRow: {
+  householdRow: {
+    paddingVertical: spacing[2],
+  },
+  householdInfo: {
+    flex: 1,
+  },
+  householdNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing[2],
+    marginBottom: spacing[1],
   },
-
-  // Avatar section
-  avatarSection: { alignItems: 'center', paddingVertical: 24 },
-  avatarCircle: {
-    width: 88, height: 88, borderRadius: 44,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 14,
-  },
-  avatarText: { color: '#FFFFFF', fontSize: 34, fontWeight: '800' },
-  userName: { fontSize: 22, fontWeight: '800', color: '#1C1C1C', marginBottom: 8 },
-  roleBadge: { borderRadius: 20, paddingVertical: 5, paddingHorizontal: 14, marginBottom: 10 },
-  roleBadgeText: { fontWeight: '700', fontSize: 13 },
-  editProfileLink: { fontSize: 13, fontWeight: '600' },
-
-  // Stats
-  statsRow: {
+  roleRow: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2DFD6',
+    alignItems: 'center',
   },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 24, fontWeight: '800', marginBottom: 4 },
-  statLabel: { fontSize: 11, color: '#888888', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
-  statDivider: { width: 1, backgroundColor: '#E2DFD6', marginVertical: 4 },
-
-  // Generic section
-  section: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginHorizontal: 20,
-    marginBottom: 20,
+  roleChip: {
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: '#E2DFD6',
+  },
+  activeBadge: {
+    backgroundColor: colors.success.soft,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: radius.pill,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.surface.overlay,
+  },
+  modalSheet: {
+    flex: 1,
+    marginTop: 80,
+    backgroundColor: colors.surface.card,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
     overflow: 'hidden',
   },
-  sectionHeader: {
-    flexDirection: 'row',
+  modalHeader: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 10,
+    paddingTop: spacing[3],
+    paddingBottom: spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.subtle,
   },
-  sectionTitle: { fontSize: 17, fontWeight: '800', color: '#1C1C1C' },
-  sectionCount: { fontSize: 13, color: '#888888', fontWeight: '600' },
-  emptyText: { fontSize: 14, color: '#888888', textAlign: 'center', padding: 20 },
-
-  // Info rows
-  infoRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, gap: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F0EDE8',
+  modalHandle: {
+    width: 36,
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border.strong,
+    marginBottom: spacing[4],
   },
-  infoIconWrapper: {
-    width: 28, alignItems: 'center', justifyContent: 'center',
+  errorBox: {
+    backgroundColor: colors.danger.soft,
+    borderRadius: radius.md,
+    padding: spacing[3],
+    marginBottom: spacing[3],
+    borderLeftWidth: 4,
+    borderLeftColor: colors.danger.base,
   },
-  infoLabel: { fontSize: 11, color: '#888888', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
-  infoValue: { fontSize: 15, color: '#1C1C1C', fontWeight: '500' },
-
-  // Member rows
-  memberRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, gap: 12,
-    borderBottomWidth: 1, borderBottomColor: '#F0EDE8',
-  },
-  memberAvatar: {
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  memberAvatarText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  memberName: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
-  memberRole: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-  youBadge: { borderRadius: 10, paddingVertical: 3, paddingHorizontal: 8 },
-  youBadgeText: { fontSize: 11, fontWeight: '700' },
-
-  // Settings rows
-  settingRow: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 14, gap: 12,
-  },
-  settingRowBorder: { borderTopWidth: 1, borderTopColor: '#F0EDE8' },
-  settingLabel: { fontSize: 15, fontWeight: '700', color: '#1C1C1C' },
-  settingDesc: { fontSize: 12, color: '#888888', marginTop: 1 },
-  chevron: { fontSize: 22, color: '#CCCCCC', fontWeight: '600' },
-
-  // Invite area
-  inviteToggle: {
-    flexDirection: 'row', margin: 14, marginBottom: 10,
-    backgroundColor: '#F3F2EE', borderRadius: 10, padding: 3,
-  },
-  inviteTabBtn: { flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center' },
-  inviteTabBtnActive: { backgroundColor: '#FFFFFF' },
-  inviteTabText: { fontSize: 13, fontWeight: '600', color: '#888888' },
-  inviteTabTextActive: { color: '#1C1C1C' },
-  inviteInfoBox: { padding: 14, paddingTop: 4 },
-  inviteInfoText: { fontSize: 14, color: '#555555', lineHeight: 20, marginBottom: 14 },
-  inviteActionBtn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
-  inviteActionBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
-
-  // Sign out
-  signOutBtn: {
-    marginHorizontal: 20, marginBottom: 12,
-    borderWidth: 1.5, borderColor: '#E57373',
-    borderRadius: 14, paddingVertical: 15,
-    alignItems: 'center',
-  },
-  signOutText: { color: '#E57373', fontWeight: '700', fontSize: 15 },
 });

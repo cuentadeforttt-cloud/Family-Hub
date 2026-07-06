@@ -80,6 +80,10 @@ const mapInviteLinkRpcError = (error, fallbackCode) => {
     return createHttpError(500, 'No se pudo crear el invite link.', 'invite_link/create_failed')
   }
 
+  if (error?.code === '22023' || message.includes('household_limit_reached')) {
+    return createHttpError(409, 'No puedes ser miembro de mas de 5 hogares activos o pendientes.', 'household/limit_reached')
+  }
+
   return createHttpError(500, 'No se pudo procesar el invite link.', fallbackCode)
 }
 

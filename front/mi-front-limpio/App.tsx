@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
 import * as Linking from 'expo-linking';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './context/AuthContext';
 import { HouseholdProvider } from './context/HouseholdContext';
 import { AppRefreshProvider } from './context/AppRefreshContext';
@@ -26,14 +27,16 @@ const linking: LinkingOptions<RootStackParamList> = {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <HouseholdProvider>
-        <AppRefreshProvider>
-          <NavigationContainer linking={linking}>
-            <AppNavigator />
-          </NavigationContainer>
-        </AppRefreshProvider>
-      </HouseholdProvider>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <HouseholdProvider>
+          <AppRefreshProvider>
+            <NavigationContainer linking={linking}>
+              <AppNavigator />
+            </NavigationContainer>
+          </AppRefreshProvider>
+        </HouseholdProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

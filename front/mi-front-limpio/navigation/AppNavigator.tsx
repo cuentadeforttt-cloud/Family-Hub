@@ -13,6 +13,7 @@ import { LoginScreen } from '../screens/Login';
 import { ForgotPasswordScreen } from '../screens/ForgotPassword';
 import { UpdatePasswordScreen } from '../screens/UpdatePassword';
 import { HomeTabNavigator } from './HomeTabNavigator';
+import { ProfileScreen } from '../screens/ProfileScreen';
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const PrivateStack = createNativeStackNavigator<PrivateStackParamList>();
@@ -187,7 +188,7 @@ const PrivateNavigator = () => {
     );
   }
 
-  // Navigator aplanado: todos los screens siempre registrados.
+// Navigator aplanado: todos los screens siempre registrados.
   // initialRouteName solo aplica en el primer mount; cambios posteriores de
   // currentHousehold NO resetean el stack, permitiendo que navigate/replace
   // post-creación permanezca en P03InvitarPersonas sin ser pisado.
@@ -204,6 +205,7 @@ const PrivateNavigator = () => {
       <PrivateStack.Screen name="PendingApprovalFallback" component={WaitingApprovalScreen} />
       <PrivateStack.Screen name="HouseholdSelectionFallback" component={HouseholdSelectionFallbackScreen} />
       <PrivateStack.Screen name="AccessSuspendedFallback" component={AccessSuspendedFallbackScreen} />
+      <PrivateStack.Screen name="ProfileScreen" component={ProfileScreen} />
     </PrivateStack.Navigator>
   );
 };

@@ -17,6 +17,7 @@ const {
 } = require('./src/routes/inviteLinks');
 const invitationsRoutes = require('./src/routes/invitations');
 const usersRoutes = require('./src/routes/users');
+const peopleRoutes = require('./src/routes/people');
 const plannerRoutes = require('./src/routes/planner');
 
 const app = express();
@@ -73,6 +74,7 @@ app.use('/api/invitations', invitationsRoutes);
 app.use('/invitations', invitationsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/users', usersRoutes);
+app.use('/api/people', peopleRoutes);
 app.use('/api/planner', plannerRoutes);
 // Ruta de prueba
 app.get('/', (req, res) => {

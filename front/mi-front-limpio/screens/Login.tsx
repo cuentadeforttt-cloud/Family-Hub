@@ -8,7 +8,7 @@ import { AuthTextInput } from '../components/AuthTextInput';
 import { useAuth } from '../context/AuthContext';
 import type { RootStackParamList } from '../navigation/types';
 import { authErrorHaptic, authSuccessHaptic } from '../utils/haptics';
-import googleLogo from '../assets/google-logo.svg';
+//import googleLogo from '../assets/google-logo.svg';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -244,7 +244,9 @@ const submitLogin = async () => {
           accessibilityRole="button"
           accessibilityLabel="Continuar con Google"
         >
-          <Image source={googleLogo} style={styles.googleIcon} resizeMode="contain" />
+          <View style={styles.googleIcon}>
+  <Text style={{ fontWeight: '800', fontSize: 16 }}>G</Text>
+</View>
           <Text style={styles.googleButtonText}>
             {googleLoading ? 'Conectando con Google...' : 'Continuar con Google'}
           </Text>

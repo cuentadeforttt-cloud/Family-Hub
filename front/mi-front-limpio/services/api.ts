@@ -386,3 +386,82 @@ export const finalizeHouseholdMember = (
       accessToken,
     },
   );
+
+export const getPeopleMe = (accessToken: string) =>
+  requestJson<{ person: AuthMePerson }>('/api/people/me', { accessToken });
+
+export type UpdatePeoplePayload = {
+  display_name?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  date_of_birth?: string | null;
+};
+
+export const updatePeopleMe = (accessToken: string, payload: UpdatePeoplePayload) =>
+  requestJson<{ person: AuthMePerson }>('/api/people/me', {
+    method: 'PATCH',
+    accessToken,
+    body: payload,
+  });
+
+export type UpdatePeopleAvatarResponse = {
+  person: AuthMePerson;
+  avatar_url: string;
+};
+
+export const updatePeopleAvatar = (accessToken: string, file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const fullUrl = buildApiUrl('/api/people/me/avatar');
+
+  return fetch(fullUrl, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: formData,
+  }).then(async (response) => {
+    const text = await response.text();
+
+    if (!text) {
+      throw new ApiError('No se recibio respuesta del servidor.', response.status);
+    }
+
+    const payload = JSON.parse(text) as UpdatePeopleAvatarResponse;
+
+    if (!response.ok) {
+      throw new ApiError(
+        getResponseMessage(payload, 'No pudimos actualizar el avatar.'),
+        response.status,
+        getResponseCode(payload),
+      );
+    }
+
+    return payload;
+  });
+};
+
+export const setActiveHousehold = (accessToken: string, householdId: string) =>
+  requestJson<{
+    person: AuthMePerson;
+    active_household: AuthMeHousehold;
+    active_membership: AuthMeMembership;
+    me: AuthMe;
+  }>(`/api/households/${householdId}/set-active`, {
+    method: 'POST',
+    accessToken,
+  });
+
+export type UserHousehold = {
+  household_id: string;
+  household_name: string;
+  role: string;
+  status: string;
+};
+
+export const getUserHouseholds = (accessToken: string) =>
+  requestJson<{ households: UserHousehold[] }>(`/api/people/me/households`, {
+    accessToken,
+  });

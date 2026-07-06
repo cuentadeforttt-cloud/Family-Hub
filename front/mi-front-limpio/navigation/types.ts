@@ -14,6 +14,7 @@ export type PrivateStackParamList = {
   PendingApprovalFallback: undefined;
   HouseholdSelectionFallback: undefined;
   AccessSuspendedFallback: undefined;
+  ProfileScreen: undefined;
 };
 
 export type HomeTabParamList = {

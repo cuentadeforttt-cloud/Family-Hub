@@ -1,10 +1,11 @@
-import React from 'react';
-import { Animated } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { Animated, ActivityIndicator, View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { HomeTabParamList, PlannerStackParamList } from './types';
+import { useAuth } from '../context/AuthContext';
 import { useHousehold } from '../context/HouseholdContext';
 import { HomeCoordinador } from '../screens/home/HomeCoordinador';
 import { HomeAdulto } from '../screens/home/HomeAdulto';
@@ -17,7 +18,10 @@ import { CreateTaskScreen } from '../screens/planner/CreateTaskScreen';
 import { EditTaskScreen } from '../screens/planner/EditTaskScreen';
 import { CreateEventScreen } from '../screens/planner/CreateEventScreen';
 import { EditEventScreen } from '../screens/planner/EditEventScreen';
+import { MoreScreen } from '../screens/MoreScreen';
 import { APP_ICONS, HomePlusIcon } from '../constants/icons';
+import { AppTopBar, HouseholdSwitcherSheet, QuickActionSheet, CenterTabButton } from '../components/ui';
+import { colors, spacing } from '../constants/theme';
 
 const Tab = createBottomTabNavigator<HomeTabParamList>();
 const PlannerStack = createNativeStackNavigator<PlannerStackParamList>();
@@ -44,7 +48,7 @@ const TabIcon = ({
   }, [focused, scale]);
   
   return (
-    <View style={{ alignItems: 'center', paddingTop: 6, minWidth: 48 }}>
+    <View style={styles.tabIconContainer}>
       <Animated.View style={{ transform: [{ scale }] }}>
         <HomePlusIcon
           name={iconName}
@@ -57,7 +61,7 @@ const TabIcon = ({
           }}
         />
       </Animated.View>
-      <Text
+      <Animated.Text
         style={{
           fontSize: 9,
           marginTop: 2,
@@ -66,7 +70,7 @@ const TabIcon = ({
         }}
       >
         {label}
-      </Text>
+      </Animated.Text>
       {focused && (
         <View
           style={{
@@ -85,11 +89,10 @@ const TabIcon = ({
 function HomeScreen() {
   const { currentRole, loading, reloading } = useHousehold();
 
-  // Mientras el contexto está cargando el rol mostramos un spinner
   if (loading || reloading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#FAFAF8', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#CD7353" />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.terracotta[600]} />
       </View>
     );
   }
@@ -99,7 +102,6 @@ function HomeScreen() {
   if (currentRole === 'adolescente')  return <HomeAdolescente />;
   if (currentRole === 'adulto_mayor') return <HomeAdultoMayor />;
 
-  // Fallback: rol desconocido
   return <HomeCoordinador />;
 }
 
@@ -115,274 +117,164 @@ function PlannerStackScreen() {
   );
 }
 
-function EmptyQuickActionScreen() {
-  return <View style={{ flex: 1, backgroundColor: '#F7F6F1' }} />;
+function FamilyStackScreen() {
+  return <FamilyScreen />;
 }
 
-function QuickAddTabButton() {
+function MoreStackScreen() {
+  return <MoreScreen />;
+}
+
+export function HomeTabNavigator() {
+  const { session, authMe } = useAuth();
+  const { currentRole } = useHousehold();
   const navigation = useNavigation<any>();
-  const [visible, setVisible] = React.useState(false);
-  const pendingAction = React.useRef<(() => void) | null>(null);
-  const fadeAnim = React.useRef(new Animated.Value(0)).current;
-  const slideAnim = React.useRef(new Animated.Value(20)).current;
+  const insets = useSafeAreaInsets();
+  
+  const [showHouseholdSwitcher, setShowHouseholdSwitcher] = useState(false);
+  const [showQuickActions, setShowQuickActions] = useState(false);
 
-  React.useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 180,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 180,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 20,
-          duration: 160,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }
-  }, [visible, fadeAnim, slideAnim]);
+  const personName = authMe?.person?.display_name ?? 'Usuario';
+  const personAvatarUrl = authMe?.person?.avatar_url ?? null;
+  const householdName = authMe?.active_household?.name ?? 'Hogar';
+  const householdRole = authMe?.memberships?.find(m => m.household_id === authMe?.active_household?.id)?.role ?? 'adult';
 
-  const runAfterQuickActionsClosed = (callback: () => void) => {
-    pendingAction.current = callback;
-    setVisible(false);
-  };
+  const handleAvatarPress = useCallback(() => {
+    navigation.navigate('ProfileScreen');
+  }, [navigation]);
 
-  React.useEffect(() => {
-    if (!visible && pendingAction.current) {
-      const action = pendingAction.current;
-      pendingAction.current = null;
-      setTimeout(action, 250);
-    }
-  }, [visible]);
+  const handleHouseholdPress = useCallback(() => {
+    setShowHouseholdSwitcher(true);
+  }, []);
 
-  const openPlannerRoute = (initialTab: 'tasks' | 'calendar', initialSheet: 'task' | 'event') => {
-    runAfterQuickActionsClosed(() => {
-      navigation.navigate('PlannerTab', {
-        screen: 'PlannerHome',
-        params: {
-          initialTab,
-          initialSheet,
-          sheetKey: Date.now(),
-          refreshKey: Date.now(),
-        },
-      });
-    });
-  };
+  const handleQuickActionPress = useCallback(() => {
+    setShowQuickActions(true);
+  }, []);
 
-const showSoon = () => {
-    runAfterQuickActionsClosed(() => {
-      navigation.navigate('PlannerTab', {
-        screen: 'PlannerHome',
-        params: { initialTab: 'goals', refreshKey: Date.now() },
-      });
-    });
-  };
+  const isAdultoMayor = currentRole === 'adulto_mayor';
+  const tabBarBg = colors.terracotta[500];
+  const tabBarHeight = isAdultoMayor ? 84 : 72;
+  const bottomPadding = Math.max(insets.bottom, spacing[3]);
 
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', top: -18 }}>
-      <TouchableOpacity
-        activeOpacity={0.82}
-        onPress={() => setVisible(true)}
-        style={{
-          width: 64,
-          height: 64,
-          borderRadius: 32,
-          backgroundColor: '#FFF8EA',
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderWidth: 4,
-          borderColor: '#CD7353',
-          shadowColor: '#000',
-          shadowOpacity: 0.2,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 8,
+    <View style={styles.container}>
+      <AppTopBar
+        personName={personName}
+        personAvatarUrl={personAvatarUrl}
+        householdName={householdName}
+        householdRole={householdRole}
+        onAvatarPress={handleAvatarPress}
+        onHouseholdPress={handleHouseholdPress}
+      />
+
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarShowLabel: false,
+          tabBarStyle: {
+            backgroundColor: tabBarBg,
+            borderTopColor: 'rgba(255,248,234,0.18)',
+            borderTopWidth: 1,
+            height: tabBarHeight + insets.bottom,
+            paddingBottom: bottomPadding,
+            paddingTop: 8,
+          },
         }}
       >
-        <HomePlusIcon
-          name={APP_ICONS.bottomTabs.add}
-          size={34}
-          color="#CD7353"
+        <Tab.Screen
+          name="HomeTab"
+          component={HomeScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon
+                iconKey="home"
+                label="Inicio"
+                focused={focused}
+              />
+            ),
+          }}
         />
-      </TouchableOpacity>
 
-<Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(23,32,26,0.36)', justifyContent: 'flex-end' }}
-          onPress={() => setVisible(false)}
-        >
-          <Animated.View
-            style={{
-              opacity: fadeAnim,
-              transform: [{ translateY: slideAnim }],
-              backgroundColor: '#FFF8EA',
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              padding: 22,
-              paddingBottom: 34,
-              borderTopWidth: 1,
-              borderColor: '#E5D8C7',
-            }}
-            onStartShouldSetResponder={() => true}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 14, position: 'relative' }}>
-              <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#E5D8C7', opacity: 0.8 }} />
-              <TouchableOpacity
-                style={{ position: 'absolute', right: 0, top: -4, paddingHorizontal: 12, paddingVertical: 6 }}
-                onPress={() => setVisible(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={{ color: '#8A8178', fontSize: 13, fontWeight: '700' }}>Cerrar</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={{ color: '#17201A', fontSize: 22, fontWeight: '900', marginBottom: 4, textAlign: 'center' }}>
-              Acciones rapidas
-            </Text>
-            <Text style={{ color: '#6E6254', fontSize: 14, marginBottom: 18, textAlign: 'center' }}>
-              Crear en el Planner del hogar.
-            </Text>
-<TouchableOpacity
-              activeOpacity={0.86}
-              style={{ backgroundColor: '#CD7353', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-              onPress={() => openPlannerRoute('tasks', 'task')}
-            >
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(255,248,234,0.25)', alignItems: 'center', justifyContent: 'center' }}>
-                <HomePlusIcon name={APP_ICONS.quickActions.createTask} size={20} color="#FFF8EA" />
-              </View>
-              <Text style={{ color: '#FFF8EA', fontWeight: '900', fontSize: 16 }}>Crear tarea</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.86}
-              style={{ backgroundColor: '#FFFFFF', borderColor: '#CD7353', borderWidth: 1, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-              onPress={() => openPlannerRoute('calendar', 'event')}
-            >
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(205,115,83,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                <HomePlusIcon name={APP_ICONS.quickActions.createEvent} size={20} color="#CD7353" />
-              </View>
-              <Text style={{ color: '#CD7353', fontWeight: '900', fontSize: 16 }}>Crear evento</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              activeOpacity={0.86}
-              style={{ backgroundColor: '#ECF3EA', borderRadius: 12, paddingVertical: 15, paddingHorizontal: 16, marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 12 }}
-              onPress={showSoon}
-            >
-              <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(73,110,71,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                <HomePlusIcon name={APP_ICONS.quickActions.geni} size={20} color="#496E47" />
-              </View>
-<Text style={{ color: '#496E47', fontWeight: '900', fontSize: 16 }}>Preguntar a Geni</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        </Pressable>
-      </Modal>
+        <Tab.Screen
+          name="PeopleTab"
+          component={FamilyStackScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon
+                iconKey="people"
+                label="Familia"
+                focused={focused}
+              />
+            ),
+          }}
+        />
+
+        <Tab.Screen
+          name="AddTab"
+          component={() => null}
+          options={{
+            tabBarButton: () => <CenterTabButton onPress={handleQuickActionPress} />,
+          }}
+          listeners={{ tabPress: (e) => e.preventDefault() }}
+        />
+
+        <Tab.Screen
+          name="PlannerTab"
+          component={PlannerStackScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon
+                iconKey="planner"
+                label="Planner"
+                focused={focused}
+              />
+            ),
+          }}
+        />
+
+        <Tab.Screen
+          name="MoreTab"
+          component={MoreStackScreen}
+          options={{
+            tabBarIcon: ({ focused }) => (
+              <TabIcon
+                iconKey="more"
+                label="Más"
+                focused={focused}
+              />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+
+      <HouseholdSwitcherSheet
+        visible={showHouseholdSwitcher}
+        onRequestClose={() => setShowHouseholdSwitcher(false)}
+        accessToken={session?.access_token ?? null}
+      />
+
+      <QuickActionSheet
+        visible={showQuickActions}
+        onRequestClose={() => setShowQuickActions(false)}
+      />
     </View>
   );
 }
 
-export function HomeTabNavigator() {
-  const { currentRole } = useHousehold();
-
-  const isAdultoMayor = currentRole === 'adulto_mayor';
-  const tabBarBg = '#CD7353';
-  const tabBarBorder = 'rgba(255,248,234,0.18)';
-  const tabBarHeight = isAdultoMayor ? 84 : 72;
-
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarShowLabel: false,
-        tabBarStyle: {
-          backgroundColor: tabBarBg,
-          borderTopColor: tabBarBorder,
-          borderTopWidth: 1,
-          height: tabBarHeight,
-          paddingBottom: isAdultoMayor ? 12 : 8,
-        },
-      }}
-    >
-{/* 1 – Inicio */}
-      <Tab.Screen
-        name="HomeTab"
-        component={HomeScreen}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              iconKey="home"
-              label="Home"
-              focused={focused}
-            />
-          ),
-        }}
-      />
-
-      {/* 2 – Calendario */}
-      <Tab.Screen
-        name="PeopleTab"
-        component={FamilyScreen}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              iconKey="people"
-              label="People"
-              focused={focused}
-            />
-          ),
-        }}
-      />
-
-      {/* 3 – Feed Familiar */}
-      <Tab.Screen
-        name="AddTab"
-        component={EmptyQuickActionScreen}
-        options={{
-          tabBarButton: () => <QuickAddTabButton />,
-        }}
-        listeners={{ tabPress: (event) => event.preventDefault() }}
-      />
-
-      {/* 4 – Inventario */}
-      <Tab.Screen
-        name="PlannerTab"
-        component={PlannerStackScreen}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              iconKey="planner"
-              label="Planner"
-              focused={focused}
-            />
-          ),
-        }}
-      />
-
-      {/* 5 – Perfil */}
-      <Tab.Screen
-        name="MoreTab"
-        component={ProfileScreen}
-        options={{
-          tabBarIcon: ({ focused }) => (
-            <TabIcon
-              iconKey="more"
-              label="More"
-              focused={focused}
-            />
-          ),
-        }}
-      />
-    </Tab.Navigator>
-  );
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background.base,
+  },
+  tabIconContainer: {
+    alignItems: 'center',
+    paddingTop: 6,
+    minWidth: 48,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.background.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
