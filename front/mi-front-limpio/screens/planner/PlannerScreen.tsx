@@ -215,6 +215,10 @@ export function PlannerScreen() {
             onChanged={changed}
             onCreateTask={() => setSheet({ type: 'task', mode: 'create' })}
             onEditTask={(id) => setSheet({ type: 'task', mode: 'edit', id })}
+            onShowToast={(msg) => {
+              setToast(msg);
+              setTimeout(() => setToast(null), 2200);
+            }}
           />
         ) : null}
 
@@ -240,6 +244,10 @@ export function PlannerScreen() {
               )
             }
             onEditTask={(id) => setSheet({ type: 'task', mode: 'edit', id })}
+            onShowToast={(msg) => {
+              setToast(msg);
+              setTimeout(() => setToast(null), 2200);
+            }}
           />
         ) : null}
 

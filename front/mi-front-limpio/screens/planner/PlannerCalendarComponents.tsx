@@ -28,20 +28,6 @@ export const CalendarDayCell: React.FC<CalendarDayCellProps> = ({
     return <View style={[S.monthDay, { opacity: 0 }]} />;
   }
 
-  const handlePressIn = () => {
-    Animated.spring(scale, {
-      toValue: 0.95,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  };
-
   const dayText = day.getDate();
   const both = hasEvent && hasTask;
 
@@ -80,9 +66,62 @@ export const CalendarDayCell: React.FC<CalendarDayCellProps> = ({
   );
 };
 
+type WeekDayCellProps = {
+  date: Date;
+  dateKey: string;
+  dayLabel: string;
+  dayNumber: number;
+  selected: boolean;
+  isToday: boolean;
+  hasEvent: boolean;
+  hasTask: boolean;
+  onPress?: () => void;
+};
+
+export const WeekDayCell: React.FC<WeekDayCellProps> = ({
+  dayLabel,
+  dayNumber,
+  selected,
+  isToday,
+  hasEvent,
+  hasTask,
+  onPress,
+}) => {
+  const scale = useMemo(() => new Animated.Value(1), []);
+
+  const both = hasEvent && hasTask;
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={[
+          S.weekDayCell,
+          selected ? S.weekDayCellSelected : {},
+          isToday && !selected ? S.weekDayCellToday : {},
+        ]}
+        onPress={onPress}
+      >
+        <Text style={[S.weekDayCellLabel, selected && { color: colors.text.inverse }]}>{dayLabel}</Text>
+        <Text style={[S.weekDayCellNumber, selected && S.weekDayCellNumberSelected]}>{dayNumber}</Text>
+        {both ? (
+          <View style={[S.calendarIndicatorBoth, { marginTop: 3 }]}>
+            <View style={[S.calendarIndicatorBothInner, { backgroundColor: colors.terracotta[400] }]} />
+            <View style={[S.calendarIndicatorBothInner, { backgroundColor: colors.sage[400] }]} />
+          </View>
+        ) : hasEvent ? (
+          <View style={[S.calendarIndicator, S.calendarIndicatorEvent, { marginTop: 3 }]} />
+        ) : hasTask ? (
+          <View style={[S.calendarIndicator, S.calendarIndicatorTask, { marginTop: 3 }]} />
+        ) : null}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
 type AgendaItemCardProps = {
   item: any;
   isSaving: boolean;
+  onShowToast?: (message: string) => void;
   onEditEvent: (item: any) => void;
   onCancelEvent: (eventId: string) => void;
   onEditTask: (taskId: string) => void;
@@ -100,6 +139,7 @@ const formatTimeShort = (value?: string | null) => {
 export const AgendaItemCard: React.FC<AgendaItemCardProps> = ({
   item,
   isSaving,
+  onShowToast,
   onEditEvent,
   onCancelEvent,
   onEditTask,

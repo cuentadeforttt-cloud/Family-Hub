@@ -293,8 +293,9 @@ export function TaskForm({
   };
 
   const content = loading ? (
-    <View style={[S.content, { minHeight: 220, justifyContent: 'center' }]}>
+    <View style={[S.content, { minHeight: 220, justifyContent: 'center', alignItems: 'center' }]}>
       <ActivityIndicator color="#CD7353" />
+      <Text style={[S.emptyText, { marginTop: 12 }]}>Cargando formulario...</Text>
     </View>
   ) : (
     <Pressable style={{ flex: 1 }} onPress={handlePressOutside}>

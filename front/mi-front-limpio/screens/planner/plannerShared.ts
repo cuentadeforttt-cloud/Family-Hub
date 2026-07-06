@@ -55,6 +55,20 @@ export const formatDate = (value?: string | null) => {
   return date.toLocaleDateString('es-AR', { day: '2-digit', month: 'short' });
 };
 
+export const getWeekDays = (centerDate: Date) => {
+  const start = new Date(centerDate);
+  start.setDate(start.getDate() - centerDate.getDay());
+  
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(start, i);
+    return {
+      date,
+      dayLabel: date.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', ''),
+      dayNumber: date.getDate(),
+    };
+  });
+};
+
 export const formatTime = (value?: string | null) => {
   if (!value) return '';
   if (value.includes('T')) {
@@ -730,6 +744,39 @@ export const plannerStyles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 21,
     marginBottom: spacing[4],
+  },
+  weekStrip: {
+    paddingVertical: spacing[2],
+  },
+  weekDayCell: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 52,
+    minHeight: 64,
+    borderRadius: radius.lg,
+    padding: 6,
+  },
+  weekDayCellSelected: {
+    backgroundColor: colors.terracotta[500],
+  },
+  weekDayCellToday: {
+    borderWidth: 2,
+    borderColor: colors.terracotta[300],
+  },
+  weekDayCellLabel: {
+    color: colors.text.tertiary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize' as const,
+  },
+  weekDayCellNumber: {
+    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  weekDayCellNumberSelected: {
+    color: colors.text.inverse,
   },
   verificationCompactCard: {
     flexDirection: 'row',

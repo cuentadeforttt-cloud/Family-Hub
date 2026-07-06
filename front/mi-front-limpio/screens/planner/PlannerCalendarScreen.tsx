@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ErrorState } from '../../components/ui';
 import { ApiError } from '../../services/api';
 import { getPlannerCalendar, type PlannerCalendarEventItem, type PlannerCalendarItem, type PlannerCalendarView } from '../../services/plannerCalendar';
 import { cancelPlannerEvent } from '../../services/plannerEvents';
@@ -12,9 +13,10 @@ import {
   addMonths,
   dateToYMD,
   formatDate,
+  getWeekDays,
   plannerStyles as S,
 } from './plannerShared';
-import { CalendarDayCell, AgendaItemCard } from './PlannerCalendarComponents';
+import { AgendaItemCard, CalendarDayCell, WeekDayCell } from './PlannerCalendarComponents';
 import { spacing } from '../../constants/theme';
 
 type Props = {
@@ -32,6 +34,7 @@ type Props = {
     },
   ) => void;
   onEditTask?: (taskId: string) => void;
+  onShowToast?: (message: string) => void;
 };
 
 const viewLabels: Record<PlannerCalendarView, string> = {
@@ -49,7 +52,7 @@ const moveDate = (date: Date, view: PlannerCalendarView, direction: -1 | 1) => {
   return addMonths(date, direction);
 };
 
-export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, onEditEvent, onEditTask }: Props) {
+export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, onEditEvent, onEditTask, onShowToast }: Props) {
   const { session, loading: authLoading } = useAuth();
   const { members } = useHousehold();
   const { plannerChangedAt, markPlannerChanged } = useAppRefresh();
@@ -62,10 +65,12 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const loadCalendar = useCallback(async () => {
+  const loadCalendar = useCallback(async (silent = false) => {
     if (!accessToken || authLoading) return;
 
-    setLoading(true);
+    if (!silent) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -77,7 +82,7 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'No pudimos cargar el calendario.');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [accessToken, authLoading, selectedDate, view]);
 
@@ -87,11 +92,22 @@ export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, on
       return;
     }
     void loadCalendar();
-  }, [loadCalendar, refreshKey, authLoading, accessToken]);
+  }, [accessToken, authLoading]);
+
+  useEffect(() => {
+    if (!authLoading || !accessToken) return;
+    void loadCalendar(true);
+  }, [view, dateToYMD(selectedDate)]);
+
+  useEffect(() => {
+    if (!loading && refreshKey != null) {
+      void loadCalendar(true);
+    }
+  }, [refreshKey]);
 
   useEffect(() => {
     if (!loading && plannerChangedAt > 0) {
-      void loadCalendar();
+      void loadCalendar(true);
     }
   }, [plannerChangedAt]);
 
@@ -132,6 +148,7 @@ const selectedDateItems = useMemo(
   }, [selectedDate]);
   const today = useMemo(() => dateToYMD(new Date()), []);
   const viewLabel = viewLabels[view];
+  const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
 
   const handleEditEvent = (item: PlannerCalendarEventItem) => {
     const context =
@@ -202,57 +219,93 @@ const selectedDateItems = useMemo(
         {view === 'month'
           ? `Este mes de ${selectedDate.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}`
           : view === 'week'
-          ? `Esta semana del ${formatDate(dateToYMD(addDays(selectedDate, -selectedDate.getDay())))} al ${formatDate(dateToYMD(addDays(selectedDate, 6 - selectedDate.getDay())))}`
-          : `Hoy, ${formatDate(dateToYMD(selectedDate))}`}
+          ? `Esta semana del ${formatDate(dateToYMD(weekDays[0].date))} al ${formatDate(dateToYMD(weekDays[6].date))}`
+          : selectedDateKey === today
+          ? `Hoy, ${formatDate(dateToYMD(selectedDate))}`
+          : selectedDateKey === dateToYMD(addDays(new Date(), 1))
+          ? `Mañana, ${formatDate(dateToYMD(selectedDate))}`
+          : `${selectedDate.toLocaleDateString('es-AR', { weekday: 'long' })}, ${formatDate(dateToYMD(selectedDate))}`}
       </Text>
 
-      <View style={[S.monthGrid, { marginBottom: 20 }]}>
-        {['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((day, index) => (
-          <Text key={day} style={S.monthWeekday}>{day.slice(0, 1)}</Text>
-        ))}
-        {monthDays.map((day, index) => {
-          const dateKey = day ? dateToYMD(day) : '';
-          const selected = dateKey === selectedDateKey;
-          const isToday = dateKey === today;
-          const dayItems = groupedItems.find(([dk]) => dk === dateKey)?.[1] ?? [];
-          const hasEvent = dayItems.some((item) => item.type === 'event');
-          const hasTask = dayItems.some((item) => item.type === 'task');
+      {view === 'month' ? (
+        <View style={[S.monthGrid, { marginBottom: 20 }]}>
+          {['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'].map((day) => (
+            <Text key={day} style={S.monthWeekday}>{day.slice(0, 1)}</Text>
+          ))}
+          {monthDays.map((day, index) => {
+            const dateKey = day ? dateToYMD(day) : '';
+            const selected = dateKey === selectedDateKey;
+            const isToday = dateKey === today;
+            const dayItems = groupedItems.find(([dk]) => dk === dateKey)?.[1] ?? [];
+            const hasEvent = dayItems.some((item) => item.type === 'event');
+            const hasTask = dayItems.some((item) => item.type === 'task');
 
-          return (
-            <CalendarDayCell
-              key={`${dateKey || 'blank'}-${index}`}
-              day={day}
-              dateKey={dateKey}
-              selected={selected}
-              isToday={isToday}
-              hasEvent={hasEvent}
-              hasTask={hasTask}
-              onPress={() => day && setSelectedDate(day)}
-            />
-          );
-        })}
-      </View>
+            return (
+              <CalendarDayCell
+                key={`${dateKey || 'blank'}-${index}`}
+                day={day}
+                dateKey={dateKey}
+                selected={selected}
+                isToday={isToday}
+                hasEvent={hasEvent}
+                hasTask={hasTask}
+                onPress={() => day && setSelectedDate(day)}
+              />
+            );
+          })}
+        </View>
+      ) : view === 'week' ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }} contentContainerStyle={{ paddingRight: spacing[4] }}>
+          <View style={[S.weekStrip, { flexDirection: 'row', gap: 8 }]}>
+            {weekDays.map((dayInfo) => {
+              const dateKey = dateToYMD(dayInfo.date);
+              const selected = dateKey === selectedDateKey;
+              const isToday = dateKey === today;
+              const dayItems = groupedItems.find(([dk]) => dk === dateKey)?.[1] ?? [];
+              const hasEvent = dayItems.some((item) => item.type === 'event');
+              const hasTask = dayItems.some((item) => item.type === 'task');
+
+              return (
+                <WeekDayCell
+                  key={dateKey}
+                  date={dayInfo.date}
+                  dateKey={dateKey}
+                  dayLabel={dayInfo.dayLabel}
+                  dayNumber={dayInfo.dayNumber}
+                  selected={selected}
+                  isToday={isToday}
+                  hasEvent={hasEvent}
+                  hasTask={hasTask}
+                  onPress={() => setSelectedDate(dayInfo.date)}
+                />
+              );
+            })}
+          </View>
+        </ScrollView>
+      ) : null}
 
       {loading ? (
         <View style={[S.emptyBox, { minHeight: 160 }]}>
           <ActivityIndicator color="#CD7353" />
+          <Text style={[S.emptyText, { marginTop: 12 }]}>Cargando calendario...</Text>
         </View>
       ) : null}
 
       {!loading && error ? (
-        <View style={S.errorBox}>
-          <Text style={S.errorText}>{error}</Text>
-          <TouchableOpacity style={[S.secondaryBtn, { marginTop: 10 }]} onPress={() => void loadCalendar()}>
-            <Text style={S.secondaryText}>Reintentar</Text>
-          </TouchableOpacity>
-        </View>
+        <ErrorState title="No pudimos cargar el calendario" description={error} retryLabel="Reintentar" onRetry={() => void loadCalendar()} />
       ) : null}
 
-      {!loading && !error && groupedItems.length === 0 ? (
+{!loading && !error && groupedItems.length === 0 ? (
         <View style={S.calendarEmptyState}>
-          <Text style={S.calendarEmptyTitle}>📅 No hay nada programado</Text>
+          <Text style={S.calendarEmptyTitle}>
+            {view === 'day' ? 'Día tranquilo' : view === 'week' ? 'Semana tranquila' : 'No hay nada programado este mes'}
+          </Text>
           <Text style={S.calendarEmptyText}>
-            Todavía no tenés eventos ni tareas. <Text style={{ fontWeight: '700' }}>Sumá un evento familiar</Text> para empezar a organizar la semana.
+            {view === 'day'
+              ? 'No hay tareas ni eventos para esta fecha.'
+              : view === 'week'
+              ? 'No hay tareas ni eventos para estos días.'
+              : 'Los eventos y tareas con fecha van a aparecer en el calendario.'}
           </Text>
           <TouchableOpacity style={[S.primaryBtn, { marginTop: 8 }]} onPress={onCreateEvent}>
             <Text style={S.btnText}>Crear evento</Text>
@@ -262,93 +315,94 @@ const selectedDateItems = useMemo(
 
       {!loading && !error && groupedItems.length > 0 && selectedDateItems.length === 0 ? (
         <View style={S.calendarEmptyState}>
-          <Text style={S.calendarEmptyTitle}>✨ Día tranquilo</Text>
-          <Text style={S.calendarEmptyText}>
-            No tenés nada programado para este día. Aprovechá para descansar o sumá una tarea familiar.
+          <Text style={S.calendarEmptyTitle}>
+            {view === 'day' ? 'Día tranquilo' : view === 'week' ? 'Día tranquilo' : 'Día tranquilo'}
           </Text>
-          <TouchableOpacity style={[S.secondaryBtn, { marginTop: 8 }]} onPress={onCreateEvent}>
-            <Text style={S.secondaryText}>Crear evento</Text>
-          </TouchableOpacity>
+          <Text style={S.calendarEmptyText}>
+            No hay tareas ni eventos para esta fecha.
+          </Text>
         </View>
       ) : null}
 
-      {!loading && !error && groupedItems.length > 0 ? (
+      {!loading && !error && selectedDateItems.length > 0 ? (
         <View>
-          {([[selectedDateKey, selectedDateItems] as [string, PlannerCalendarItem[]]])
-            .filter(([, dateItems]) => dateItems.length > 0)
-            .map(([dateKey, dateItems]) => (
-            <View key={dateKey}>
-              <Text style={[S.label, { marginTop: 8, textTransform: 'none', fontSize: 13 }]}>
-                Agenda de {formatDate(dateKey)}
-              </Text>
-              {dateItems.map((item) => {
-                const uniqueKey = item.type === 'event' ? item.occurrence_id ?? item.id : item.id;
-                const isSaving = savingId === item.id;
+          <Text style={[S.label, { marginTop: 8, textTransform: 'none', fontSize: 13 }]}>
+            {view === 'month'
+              ? `Agenda del ${selectedDate.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: 'short' })}`
+              : view === 'day'
+              ? 'Agenda del día'
+              : `Agenda del ${selectedDate.toLocaleDateString('es-AR', { weekday: 'long', day: '2-digit', month: 'short' })}`}
+          </Text>
+          {selectedDateItems.map((item) => {
+            const uniqueKey = item.type === 'event' ? item.occurrence_id ?? item.id : item.id;
+            const isSaving = savingId === item.id;
 
-                return (
-                  <AgendaItemCard
-                    key={uniqueKey}
-                    item={item}
-                    isSaving={isSaving}
-                    onEditEvent={(evt) => {
-                      const context =
-                        evt.is_recurring_occurrence && !evt.is_override
-                          ? {
-                              baseEventId: evt.id,
-                              occurrenceId: evt.occurrence_id,
-                              occurrenceStartsAt: evt.starts_at,
-                              occurrenceEndsAt: evt.ends_at ?? undefined,
-                              isGeneratedRecurringOccurrence: true,
-                            }
-                          : undefined;
-                      onEditEvent?.(evt.id, context);
-                    }}
-                    onCancelEvent={(eventId) => {
-                      if (!accessToken) return;
-                      Alert.alert('¿Cancelar este evento?', 'Dejará de aparecer como próximo evento.', [
-                        { text: 'Volver', style: 'cancel' },
-                        {
-                          text: 'Cancelar evento',
-                          style: 'destructive',
-                          onPress: async () => {
-                            setSavingId(eventId);
-                            try {
-                              await cancelPlannerEvent(accessToken, eventId);
-                              markPlannerChanged();
-                              await loadCalendar();
-                              onChanged?.();
-                            } catch (err) {
-                              Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos cancelar el evento.');
-                            } finally {
-                              setSavingId(null);
-                            }
-                          },
-                        },
-                      ]);
-                    }}
-                    onEditTask={(taskId) => onEditTask?.(taskId)}
-                    onCompleteTask={async (taskId) => {
-                      if (!accessToken) {
-                        Alert.alert('Planner', 'No hay sesión activa para completar la tarea.');
-                        return;
-                      }
-                      setSavingId(taskId);
-                      try {
-                        await completePlannerTask(accessToken, taskId);
-                        markPlannerChanged();
-                        await loadCalendar();
-                        onChanged?.();
-                      } catch (err) {
-                        Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos completar la tarea.');
-                      } finally {
-                        setSavingId(null);
-                      }
-                    }}
-                  />
-                );
-              })}
-            </View>
-          ))}
+            return (
+<AgendaItemCard
+                 key={uniqueKey}
+                 item={item}
+                 isSaving={isSaving}
+                 onShowToast={onShowToast}
+                 onEditEvent={(evt) => {
+                   const context =
+                     evt.is_recurring_occurrence && !evt.is_override
+                       ? {
+                           baseEventId: evt.id,
+                           occurrenceId: evt.occurrence_id,
+                           occurrenceStartsAt: evt.starts_at,
+                           occurrenceEndsAt: evt.ends_at ?? undefined,
+                           isGeneratedRecurringOccurrence: true,
+                         }
+                       : undefined;
+                   onEditEvent?.(evt.id, context);
+                 }}
+                 onCancelEvent={(eventId) => {
+                   if (!accessToken) return;
+                   Alert.alert('¿Cancelar este evento?', 'Dejará de aparecer como próximo evento.', [
+                     { text: 'Volver', style: 'cancel' },
+                     {
+                       text: 'Cancelar evento',
+                       style: 'destructive',
+                       onPress: async () => {
+                         setSavingId(eventId);
+                         try {
+                           await cancelPlannerEvent(accessToken, eventId);
+                           markPlannerChanged();
+                           await loadCalendar(true);
+                           onChanged?.();
+                           onShowToast?.('Evento cancelado');
+                         } catch (err) {
+                           Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos cancelar el evento.');
+                         } finally {
+                           setSavingId(null);
+                         }
+                       },
+                     },
+                   ]);
+                 }}
+                 onEditTask={(taskId) => onEditTask?.(taskId)}
+                 onCompleteTask={async (taskId) => {
+                   if (!accessToken) {
+                     Alert.alert('Planner', 'No hay sesión activa para completar la tarea.');
+                     return;
+                   }
+                   setSavingId(taskId);
+                   try {
+                     const response = await completePlannerTask(accessToken, taskId);
+                     const task = response.task;
+                     markPlannerChanged();
+                     await loadCalendar(true);
+                     onChanged?.();
+                     onShowToast?.(task.requires_verification ? 'Tarea enviada a revisión' : 'Tarea completada');
+                   } catch (err) {
+                     Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos completar la tarea.');
+                   } finally {
+                     setSavingId(null);
+                   }
+                 }}
+               />
+            );
+          })}
         </View>
       ) : null}
     </View>

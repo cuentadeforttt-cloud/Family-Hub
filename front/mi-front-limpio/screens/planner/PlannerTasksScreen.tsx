@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ErrorState } from '../../components/ui';
 import { ApiError } from '../../services/api';
 import {
   cancelPlannerTask,
@@ -20,6 +21,7 @@ type Props = {
   onChanged?: () => void;
   onCreateTask?: () => void;
   onEditTask?: (taskId: string) => void;
+  onShowToast?: (message: string) => void;
 };
 
 type FilterKey = 'open' | 'mine' | 'family' | 'today' | 'overdue' | 'awaiting' | 'done' | 'cancelled';
@@ -243,7 +245,7 @@ function TaskCard({
   );
 }
 
-export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEditTask }: Props) {
+export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEditTask, onShowToast }: Props) {
   const { session, authMe, loading: authLoading } = useAuth();
   const { members } = useHousehold();
   const { plannerChangedAt, markPlannerChanged } = useAppRefresh();
@@ -399,6 +401,12 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
       markPlannerChanged();
       await loadTasks();
       onChanged?.();
+      
+      if (action === 'complete') {
+        onShowToast?.(task.requires_verification ? 'Tarea enviada a revisión' : 'Tarea completada');
+      } else if (action === 'verify') {
+        onShowToast?.('Tarea verificada');
+      }
     } catch (err) {
       setTasks(previousTasks);
       Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos actualizar la tarea.');
@@ -432,6 +440,7 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
             markPlannerChanged();
             await loadTasks();
             onChanged?.();
+            onShowToast?.('Tarea cancelada');
           } catch (err) {
             Alert.alert('Planner', err instanceof ApiError ? err.message : 'No pudimos cancelar la tarea.');
           } finally {
@@ -446,18 +455,14 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
     return (
       <View style={[S.emptyBox, { minHeight: 160 }]}>
         <ActivityIndicator color="#CD7353" />
+        <Text style={[S.emptyText, { marginTop: 12 }]}>Cargando tareas...</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={S.errorBox}>
-        <Text style={S.errorText}>{error}</Text>
-        <TouchableOpacity style={[S.secondaryBtn, { marginTop: 10 }]} onPress={() => void loadTasks()}>
-          <Text style={S.secondaryText}>Reintentar</Text>
-        </TouchableOpacity>
-      </View>
+      <ErrorState title="No pudimos cargar las tareas" description={error} retryLabel="Reintentar" onRetry={() => void loadTasks()} />
     );
   }
 
@@ -491,8 +496,8 @@ export function PlannerTasksScreen({ refreshKey, onChanged, onCreateTask, onEdit
 
       {visibleTasks.length === 0 ? (
         <View style={S.emptyBox}>
-          <Text style={S.emptyTitle}>Acá van a aparecer tus tareas</Text>
-          <Text style={S.emptyText}>Creá una tarea o asigná una responsabilidad para organizar el hogar.</Text>
+          <Text style={S.emptyTitle}>No hay tareas pendientes</Text>
+          <Text style={S.emptyText}>Cuando creen tareas para el hogar, van a aparecer acá.</Text>
           <TouchableOpacity style={[S.primaryBtn, { marginTop: 14 }]} onPress={onCreateTask}>
             <Text style={S.btnText}>Crear tarea</Text>
           </TouchableOpacity>

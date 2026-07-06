@@ -43,6 +43,28 @@ type EventFormProps = {
 
 const recurrenceOptions: PlannerEventRecurrence[] = ['none', 'daily', 'weekly', 'monthly'];
 
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+const validateDate = (value: string): string | null => {
+  if (!value.trim()) return 'Ingresá una fecha.';
+  if (!DATE_REGEX.test(value.trim())) return 'Ingresá una fecha válida con formato AAAA-MM-DD.';
+  return null;
+};
+
+const validateTime = (value: string): string | null => {
+  if (!value.trim()) return 'Ingresá una hora.';
+  if (!TIME_REGEX.test(value.trim())) return 'Ingresá una hora válida con formato HH:mm.';
+  return null;
+};
+
+const validateEndTime = (start: string, end: string): string | null => {
+  if (!start.trim() || !end.trim()) return null;
+  if (!TIME_REGEX.test(start.trim()) || !TIME_REGEX.test(end.trim())) return null;
+  if (end.trim() <= start.trim()) return 'La hora de fin debe ser posterior a la hora de inicio.';
+  return null;
+};
+
 const splitIso = (value?: string | null) => {
   if (!value) return { date: dateToYMD(new Date()), time: '09:00' };
   const date = new Date(value);
@@ -76,10 +98,14 @@ export function EventForm({
   const [error, setError] = useState<string | null>(null);
   const [editScope, setEditScope] = useState<'occurrence' | 'series'>('occurrence');
   const [title, setTitle] = useState('');
+  const [titleTouched, setTitleTouched] = useState(false);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(dateToYMD(new Date()));
+  const [dateTouched, setDateTouched] = useState(false);
   const [startTime, setStartTime] = useState('09:00');
+  const [startTimeTouched, setStartTimeTouched] = useState(false);
   const [endTime, setEndTime] = useState('10:00');
+  const [endTimeTouched, setEndTimeTouched] = useState(false);
   const [allDay, setAllDay] = useState(false);
   const [locationName, setLocationName] = useState('');
   const [recurrence, setRecurrence] = useState<PlannerEventRecurrence>('none');
@@ -88,6 +114,12 @@ export function EventForm({
     if (authLoading || loading || saving) return false;
     if (!accessToken) return false;
     if (!title.trim()) return false;
+    if (!DATE_REGEX.test(date.trim())) return false;
+    if (!allDay) {
+      if (!TIME_REGEX.test(startTime.trim())) return false;
+      if (!TIME_REGEX.test(endTime.trim())) return false;
+      if (endTime.trim() <= startTime.trim()) return false;
+    }
 
     if (mode === 'create') {
       return true;
@@ -104,7 +136,7 @@ export function EventForm({
       return true;
     }
     return false;
-  }, [authLoading, loading, saving, accessToken, title, mode, eventId, isGeneratedRecurringOccurrence, editScope, baseEventId, occurrenceStartsAt]);
+  }, [authLoading, loading, saving, accessToken, title, date, allDay, startTime, endTime, mode, eventId, isGeneratedRecurringOccurrence, editScope, baseEventId, occurrenceStartsAt]);
 
   useEffect(() => {
     const loadEvent = async () => {
@@ -175,8 +207,23 @@ export function EventForm({
       return;
     }
 
-    if (!title.trim()) {
-      Alert.alert('Planner', 'Agregá un título para el evento.');
+    setTitleTouched(true);
+    setDateTouched(true);
+    setStartTimeTouched(true);
+    setEndTimeTouched(true);
+
+    const titleError = !title.trim() ? 'Ingresá un título para el evento.' : null;
+    const dateError = validateDate(date);
+    const startTimeError = !allDay ? validateTime(startTime) : null;
+    const endTimeError = !allDay ? validateTime(endTime) : null;
+    const timeOrderError = !allDay ? validateEndTime(startTime, endTime) : null;
+
+    if (titleError || dateError || startTimeError || endTimeError || timeOrderError) {
+      if (titleError) setError(titleError);
+      else if (dateError) setError(dateError);
+      else if (startTimeError) setError(startTimeError);
+      else if (endTimeError) setError(endTimeError);
+      else if (timeOrderError) setError(timeOrderError);
       return;
     }
 
@@ -192,18 +239,13 @@ export function EventForm({
     }
 
     const startsAt = buildLocalIso(date, allDay ? '00:00' : startTime);
-    const endsAt = allDay ? undefined : buildLocalIso(date, endTime || startTime);
-
-    if (endsAt && new Date(endsAt).getTime() < new Date(startsAt).getTime()) {
-      Alert.alert('Planner', 'La hora de fin no puede ser anterior al inicio.');
-      return;
-    }
+    const finalEndsAt = allDay ? undefined : buildLocalIso(date, endTime);
 
     const payload: CreatePlannerEventPayload = {
       title: title.trim(),
       description: description.trim() || undefined,
       starts_at: startsAt,
-      ends_at: endsAt,
+      ends_at: finalEndsAt,
       all_day: allDay,
       location_name: locationName.trim() || undefined,
       recurrence,
@@ -338,8 +380,9 @@ if (isGeneratedRecurringOccurrence) {
   };
 
   const content = loading ? (
-    <View style={[S.content, { minHeight: 220, justifyContent: 'center' }]}>
+    <View style={[S.content, { minHeight: 220, justifyContent: 'center', alignItems: 'center' }]}>
       <ActivityIndicator color="#CD7353" />
+      <Text style={[S.emptyText, { marginTop: 12 }]}>Cargando formulario...</Text>
     </View>
   ) : (
     <Pressable style={{ flex: 1 }} onPress={handlePressOutside}>
@@ -418,12 +461,16 @@ if (isGeneratedRecurringOccurrence) {
         <View style={S.eventFormSection}>
             <Text style={S.formLabelHuman}>¿Qué evento es?</Text>
             <TextInput
-              style={[S.eventFormInput, S.eventFormInputFocus]}
+              style={[S.eventFormInput, S.eventFormInputFocus, !title.trim() && titleTouched && { borderColor: colors.danger.base }]}
               value={title}
               onChangeText={setTitle}
+              onFocus={() => { if (error) setError(null); }}
               placeholder="Ej. Control médico, Cumpleaños de Ana..."
               placeholderTextColor={colors.text.tertiary}
             />
+            {!title.trim() && titleTouched ? (
+              <Text style={S.formErrorInline}>Ingresá un título para el evento.</Text>
+            ) : null}
           </View>
 
           <View style={S.eventFormSection}>
@@ -441,13 +488,18 @@ if (isGeneratedRecurringOccurrence) {
           <View style={S.eventFormSection}>
             <Text style={S.formLabelHuman}>Fecha</Text>
             <TextInput
-              style={[S.eventFormInput, S.eventFormInputFocus]}
+              style={[S.eventFormInput, S.eventFormInputFocus, validateDate(date) && dateTouched && { borderColor: colors.danger.base }]}
               value={date}
               onChangeText={setDate}
+              onFocus={() => { if (error) setError(null); }}
               placeholder="2024-06-15"
               placeholderTextColor={colors.text.tertiary}
             />
-            <Text style={S.formHelperText}>Usá el formato AAAA-MM-DD.</Text>
+            {validateDate(date) && dateTouched ? (
+              <Text style={S.formErrorInline}>{validateDate(date)}</Text>
+            ) : (
+              <Text style={S.formHelperText}>Usá el formato AAAA-MM-DD.</Text>
+            )}
           </View>
 
           <View style={S.allDayCompactCard}>
@@ -461,25 +513,37 @@ if (isGeneratedRecurringOccurrence) {
                 <View style={{ flex: 1 }}>
                   <Text style={S.formLabelHuman}>Hora de inicio</Text>
                   <TextInput
-                    style={[S.eventFormInput, S.eventFormInputFocus]}
+                    style={[S.eventFormInput, S.eventFormInputFocus, validateTime(startTime) && startTimeTouched && { borderColor: colors.danger.base }]}
                     value={startTime}
                     onChangeText={setStartTime}
+                    onFocus={() => { if (error) setError(null); }}
                     placeholder="09:00"
                     placeholderTextColor={colors.text.tertiary}
                   />
+                  {validateTime(startTime) && startTimeTouched ? (
+                    <Text style={S.formErrorInline}>{validateTime(startTime)}</Text>
+                  ) : null}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={S.formLabelHuman}>Hora de fin</Text>
                   <TextInput
-                    style={[S.eventFormInput, S.eventFormInputFocus]}
+                    style={[S.eventFormInput, S.eventFormInputFocus, validateTime(endTime) && endTimeTouched && { borderColor: colors.danger.base }]}
                     value={endTime}
                     onChangeText={setEndTime}
+                    onFocus={() => { if (error) setError(null); }}
                     placeholder="18:30"
                     placeholderTextColor={colors.text.tertiary}
                   />
+                  {validateTime(endTime) && endTimeTouched ? (
+                    <Text style={S.formErrorInline}>{validateTime(endTime)}</Text>
+                  ) : null}
                 </View>
               </View>
-              <Text style={S.formHelperText}>Usá formato 24hs, ej. 14:30.</Text>
+              {validateEndTime(startTime, endTime) && (startTimeTouched || endTimeTouched) ? (
+                <Text style={S.formErrorInline}>{validateEndTime(startTime, endTime)}</Text>
+              ) : (
+                <Text style={S.formHelperText}>Usá formato 24hs, ej. 14:30.</Text>
+              )}
             </View>
           ) : null}
 
