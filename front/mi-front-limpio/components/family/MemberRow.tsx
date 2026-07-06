@@ -1,9 +1,10 @@
 import React from 'react';
 import { StyleSheet, View, TouchableOpacity } from 'react-native';
-import { AppText, AppAvatar, AppButton, ActionPill } from '../ui';
+import { AppText, AppAvatar, ActionPill } from '../ui';
 import { colors, radius, spacing } from '../../constants/theme';
-import { FamilyMember, ROLE_LABELS, Role } from '../../services/family';
+import { FamilyMember } from '../../services/family';
 import { HomePlusIcon } from '../../constants/icons';
+import { RoleBadge } from './RoleBadge';
 
 type MemberRowProps = {
   member: FamilyMember;
@@ -22,8 +23,6 @@ export const MemberRow: React.FC<MemberRowProps> = ({
   onAction,
   showActions = false,
 }) => {
-  const roleLabel = ROLE_LABELS[member.role as Role] ?? member.role;
-
   return (
     <TouchableOpacity
       activeOpacity={0.7}
@@ -41,7 +40,7 @@ export const MemberRow: React.FC<MemberRowProps> = ({
 
       <View style={styles.infoContainer}>
         <View style={styles.nameRow}>
-          <AppText variant="body" weight="600">
+          <AppText variant="body" weight="600" numberOfLines={1} style={styles.nameText}>
             {member.display_name}
           </AppText>
           {isSelf ? (
@@ -50,16 +49,13 @@ export const MemberRow: React.FC<MemberRowProps> = ({
         </View>
 
         <View style={styles.metaRow}>
-          <HomePlusIcon name="ribbon" size={14} color={colors.text.tertiary} />
-          <AppText variant="bodySmall" tone="secondary">
-            {roleLabel}
-          </AppText>
+          <RoleBadge role={member.role} />
         </View>
       </View>
 
       {showActions && (canManageMembers || canChangeRoles) ? (
         <View style={styles.actionContainer}>
-          <HomePlusIcon name="options" size={20} color={colors.text.tertiary} />
+          <HomePlusIcon name="person-circle-outline" size={21} color={colors.text.tertiary} />
         </View>
       ) : null}
     </TouchableOpacity>
@@ -84,6 +80,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
+  },
+  nameText: {
+    flexShrink: 1,
   },
   metaRow: {
     flexDirection: 'row',

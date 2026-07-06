@@ -4,6 +4,7 @@ import { AppText, AppCard, AppButton, ActionPill, Skeleton, EmptyState } from '.
 import { colors, radius, spacing, shadows } from '../../constants/theme';
 import { HomePlusIcon } from '../../constants/icons';
 import { RoleRequest, Role, ROLE_LABELS, JoinRequestData, PendingRole } from '../../services/family';
+import { isInviteLinkActive } from './inviteLinkUtils';
 
 type FamilyPendingSheetProps = {
   visible: boolean;
@@ -62,7 +63,7 @@ export const FamilyPendingSheet: React.FC<FamilyPendingSheetProps> = ({
 
   const pendingJoinRequests = joinRequests.filter((r) => r.status === 'pending');
   const pendingRoleRequests = roleRequests.filter((r) => r.status === 'pending');
-  const hasActiveInviteLink = inviteLinks.some((link) => !link.revoked_at && !link.expires_at);
+  const hasActiveInviteLink = inviteLinks.some(isInviteLinkActive);
 
   const handleApproveJoin = async (request: JoinRequestData) => {
     const role = roleByRequest[request.membership_id] ?? 'adult';
@@ -324,7 +325,7 @@ export const FamilyPendingSheet: React.FC<FamilyPendingSheetProps> = ({
                     No hay un link de invitación activo. Creá uno para compartir.
                   </AppText>
                   <AppButton
-                    title="Crear invitación"
+                    title="Invitar miembro"
                     variant="primary"
                     size="sm"
                     loading={inviteActionLoading}
@@ -336,11 +337,11 @@ export const FamilyPendingSheet: React.FC<FamilyPendingSheetProps> = ({
           </View>
         ) : null}
 
-        {pendingJoinRequests.length === 0 && pendingRoleRequests.length === 0 && !canInvite ? (
+        {pendingJoinRequests.length === 0 && pendingRoleRequests.length === 0 ? (
           <AppCard variant="quiet" padding="generous">
             <EmptyState
-              title="Todo al día"
-              description="No hay solicitudes ni pendientes por revisar."
+              title="No hay solicitudes pendientes."
+              description="Cuando alguien solicite ingreso o un cambio de rol, aparecerá acá."
             />
           </AppCard>
         ) : null}

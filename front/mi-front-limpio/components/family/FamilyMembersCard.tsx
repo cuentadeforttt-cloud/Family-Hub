@@ -1,11 +1,11 @@
 import React from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
-import { AppText, AppCard, AppButton, ActionPill, Skeleton, EmptyState } from '../ui';
+import { StyleSheet, View } from 'react-native';
+import { AppText, AppCard, AppButton, Skeleton, EmptyState } from '../ui';
 import { colors, radius, spacing } from '../../constants/theme';
-import { FamilyData, FamilyMember, ROLE_LABELS } from '../../services/family';
+import { FamilyData, FamilyMember } from '../../services/family';
 import { HomePlusIcon } from '../../constants/icons';
 import { MemberRow } from './MemberRow';
-import { PendingSummaryPill } from './PendingSummaryPill';
+import { isInviteLinkActive } from './inviteLinkUtils';
 
 type FamilyMembersCardProps = {
   familyData: FamilyData | null;
@@ -31,11 +31,14 @@ export const FamilyMembersCard: React.FC<FamilyMembersCardProps> = ({
   const join_requests = familyData?.join_requests ?? [];
   const role_requests = familyData?.role_requests ?? [];
   const invite_links = familyData?.invite_links ?? [];
+  const activeMembers = members.filter((member) => member.status === 'active');
+  const inactiveMembers = members.filter((member) => member.status !== 'active');
+  const pendingJoinRequests = join_requests.filter((r) => r.status === 'pending');
+  const pendingRoleRequests = role_requests.filter((r) => r.status === 'pending');
 
-  const pendingCount = join_requests.filter((r) => r.status === 'pending').length +
-    role_requests.filter((r) => r.status === 'pending').length;
+  const pendingCount = pendingJoinRequests.length + pendingRoleRequests.length;
 
-  const hasActiveInviteLink = invite_links.some((link) => !link.revoked_at && !link.expires_at);
+  const hasActiveInviteLink = invite_links.some(isInviteLinkActive);
 
   const handleInvite = () => {
     onInvitePress();
@@ -98,8 +101,22 @@ export const FamilyMembersCard: React.FC<FamilyMembersCardProps> = ({
       <AppCard variant="quiet" padding="generous">
         <View style={styles.emptyCard}>
           <EmptyState
-            title="No pudimos encontrar tu membresia activa."
+            title="No pudimos encontrar tu membresía activa."
             description="Reintenta cargar la familia para sincronizar tus permisos."
+          />
+          <AppButton title="Reintentar" size="sm" onPress={onRetry} />
+        </View>
+      </AppCard>
+    );
+  }
+
+  if (current_member.status === 'pending') {
+    return (
+      <AppCard variant="quiet" padding="generous">
+        <View style={styles.emptyCard}>
+          <EmptyState
+            title="Solicitud pendiente"
+            description="Tu acceso al hogar todavía está esperando aprobación."
           />
           <AppButton title="Reintentar" size="sm" onPress={onRetry} />
         </View>
@@ -113,41 +130,84 @@ export const FamilyMembersCard: React.FC<FamilyMembersCardProps> = ({
         <View style={styles.header}>
           <View style={{ flex: 1 }}>
             <AppText variant="title3">Miembros</AppText>
-<View style={styles.metaRow}>
+            <View style={styles.metaRow}>
               <AppText variant="bodySmall" tone="secondary">
-                {members.length} integrante{members.length !== 1 ? 's' : ''}
+                {activeMembers.length} integrante{activeMembers.length !== 1 ? 's' : ''}
               </AppText>
-              <AppText variant="bodySmall" tone="muted">
-                {' · '}
+              {pendingCount > 0 ? (
+                <>
+                  <View style={styles.metaDot} />
+                  <AppText variant="bodySmall" tone="secondary">
+                    {pendingCount} solicitud{pendingCount !== 1 ? 'es' : ''} pendiente{pendingCount !== 1 ? 's' : ''}
+                  </AppText>
+                </>
+              ) : null}
+            </View>
+            <View style={styles.inviteStatusRow}>
+              <View style={[styles.statusDot, hasActiveInviteLink ? styles.statusDotActive : styles.statusDotMuted]} />
+              <AppText variant="caption" tone="tertiary">
+                {hasActiveInviteLink ? 'Link activo' : 'Sin invitación activa'}
               </AppText>
-              <ActionPill label={ROLE_LABELS[current_member.role]} tone={current_member.role === 'coordinator' ? 'primary' : 'success'} disabled />
             </View>
           </View>
         </View>
 
-        {pendingCount > 0 ? (
-          <PendingSummaryPill count={pendingCount} onPress={onPendingPress} />
+        {current_member.can_invite ? (
+          <AppButton
+            title="Invitar miembro"
+            variant="secondary"
+            size="sm"
+            onPress={handleInvite}
+            leftSlot={<HomePlusIcon name="person-add" size={16} color={colors.terracotta[600]} />}
+            style={styles.inviteAction}
+          />
         ) : null}
 
-        {current_member.can_invite ? (
-          <TouchableOpacity onPress={handleInvite} activeOpacity={0.7} style={styles.inviteAction}>
-            <View style={styles.inviteButton}>
-              <HomePlusIcon name="person-add" size={16} color={colors.terracotta[600]} />
-              <AppText variant="bodySmall" weight="600" tone="primary">
-                {hasActiveInviteLink ? 'Invitación activa' : 'Crear invitación'}
+        <View style={styles.pendingSummary}>
+          <View style={styles.pendingHeader}>
+            <View style={styles.pendingTitleRow}>
+              <HomePlusIcon name="time-outline" size={16} color={colors.text.tertiary} />
+              <AppText variant="bodySmall" weight="700">
+                Solicitudes pendientes
               </AppText>
             </View>
-          </TouchableOpacity>
-        ) : null}
+            {pendingCount > 0 ? (
+              <AppButton title="Revisar" variant="ghost" size="sm" onPress={onPendingPress} style={styles.reviewButton} />
+            ) : null}
+          </View>
+          {pendingCount > 0 ? (
+            <View style={styles.pendingPreviewList}>
+              {pendingJoinRequests.slice(0, 1).map((request) => (
+                <AppText key={request.membership_id} variant="caption" tone="secondary" numberOfLines={1}>
+                  Ingreso · {request.display_name}
+                </AppText>
+              ))}
+              {pendingRoleRequests.slice(0, 1).map((request) => (
+                <AppText key={request.id} variant="caption" tone="secondary" numberOfLines={1}>
+                  Cambio de rol · {request.display_name}
+                </AppText>
+              ))}
+              {pendingCount > 2 ? (
+                <AppText variant="caption" tone="tertiary">
+                  {pendingCount - 2} más por revisar
+                </AppText>
+              ) : null}
+            </View>
+          ) : (
+            <AppText variant="caption" tone="tertiary">
+              Sin solicitudes pendientes
+            </AppText>
+          )}
+        </View>
 
         <View style={styles.membersList}>
-          {members.length === 0 ? (
+          {activeMembers.length === 0 ? (
             <EmptyState
               title="Aún no hay miembros"
               description="Cuando alguien se sume al hogar, lo vas a ver aquí."
             />
           ) : (
-            members.map((member) => (
+            activeMembers.map((member) => (
               <MemberRow
                 key={member.membership_id}
                 member={member}
@@ -159,6 +219,16 @@ export const FamilyMembersCard: React.FC<FamilyMembersCardProps> = ({
               />
             ))
           )}
+          {inactiveMembers.length > 0 ? (
+            <View style={styles.pendingBlock}>
+              <AppText variant="caption" tone="tertiary" weight="700">
+                Solicitudes pendientes
+              </AppText>
+              <AppText variant="bodySmall" tone="secondary">
+                Revisalas desde el panel de pendientes.
+              </AppText>
+            </View>
+          ) : null}
         </View>
       </View>
     </AppCard>
@@ -179,6 +249,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing[2],
     marginTop: spacing[1],
+    flexWrap: 'wrap',
   },
   metaDot: {
     width: 4,
@@ -186,24 +257,64 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.text.muted,
   },
-  inviteAction: {
-    alignSelf: 'flex-start',
-  },
-  inviteButton: {
+  inviteStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing[2],
-    paddingHorizontal: spacing[3],
+    marginTop: spacing[2],
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: radius.pill,
+  },
+  statusDotActive: {
+    backgroundColor: colors.success.base,
+  },
+  statusDotMuted: {
+    backgroundColor: colors.border.strong,
+  },
+  inviteAction: {
+    alignSelf: 'flex-start',
+  },
+  pendingSummary: {
+    gap: spacing[2],
     paddingVertical: spacing[2],
-    backgroundColor: colors.terracotta[50],
-    borderRadius: radius.md,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.border.subtle,
+  },
+  pendingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing[2],
+  },
+  pendingTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    flex: 1,
+  },
+  reviewButton: {
+    minHeight: 32,
+  },
+  pendingPreviewList: {
+    gap: spacing[1],
   },
   membersList: {
-    gap: spacing[1],
+    gap: spacing[2],
   },
   emptyCard: {
     alignItems: 'center',
     gap: spacing[2],
+  },
+  pendingBlock: {
+    marginTop: spacing[2],
+    paddingTop: spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: colors.border.subtle,
+    gap: spacing[1],
   },
   memberSkeleton: {
     flexDirection: 'row',

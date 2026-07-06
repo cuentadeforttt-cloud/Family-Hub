@@ -10,14 +10,16 @@ import {
   FamilyPendingSheet,
   MemberActionsSheet,
   InviteLinkSheet,
-  FamilyActionFeedback,
-  type FeedbackType,
+  FamilySnackbar,
+  type FamilySnackbarType,
+  type FamilyLottieSlot,
+  getRoleLabel,
 } from '../components/family';
+import { buildInviteDeepLink, isInviteLinkActive, normalizeInviteLink } from '../components/family/inviteLinkUtils';
 import {
   type FamilyData,
   type FamilyMember,
   type PendingRole,
-  ROLE_LABELS,
   type Role,
   getHouseholdFamily,
   finalizeMember,
@@ -27,7 +29,7 @@ import {
   rejectRoleChange,
   cancelMyRoleRequest,
 } from '../services/family';
-import { createInvitation, revokeInvitation } from '../services/invitations';
+import { createInvitation, revokeInvitation, type Invitation } from '../services/invitations';
 
 export const FamilyScreen = () => {
   const { session, authMe, authMeLoading } = useAuth();
@@ -44,21 +46,29 @@ export const FamilyScreen = () => {
   const [actionsSheetVisible, setActionsSheetVisible] = useState(false);
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
   const [inviteLinkVisible, setInviteLinkVisible] = useState(false);
+  const [localInviteLink, setLocalInviteLink] = useState<Invitation | null>(null);
   const [feedback, setFeedback] = useState<{
-    type: FeedbackType;
-    title: string;
-    description?: string;
-    lottieSlot?: string;
+    type: FamilySnackbarType;
+    message: string;
+    detail?: string;
+    lottieSlot?: FamilyLottieSlot;
   } | null>(null);
 
   const showFeedback = useCallback((nextFeedback: {
-    type: FeedbackType;
-    title: string;
-    description?: string;
-    lottieSlot?: string;
+    type: FamilySnackbarType;
+    message: string;
+    detail?: string;
+    lottieSlot?: FamilyLottieSlot;
   }) => {
     setFeedback(nextFeedback);
   }, []);
+
+  const showErrorFeedback = useCallback((message: string) => {
+    showFeedback({
+      type: 'error',
+      message,
+    });
+  }, [showFeedback]);
 
   const loadFamily = useCallback(async () => {
     if (__DEV__) {
@@ -130,78 +140,79 @@ export const FamilyScreen = () => {
     setInviteLinkVisible(true);
   }, []);
 
-  const handleCreateInviteFromSheet = useCallback(async (): Promise<string | null> => {
+  const handleCreateInviteFromSheet = useCallback(async (): Promise<Invitation | string | null> => {
     if (!householdId) return 'No pudimos encontrar el hogar activo.';
 
     try {
       const { invitation, error: inviteError } = await createInvitation(householdId);
 
+      if (__DEV__) {
+        const normalized = normalizeInviteLink(invitation);
+        console.log('[FamilyScreen] invite created response', {
+          hasToken: Boolean(normalized.token),
+          hasUrl: Boolean(normalized.url),
+          keys: invitation ? Object.keys(invitation) : [],
+        });
+      }
+
       if (inviteError) {
         return inviteError;
       } else if (invitation) {
+        setLocalInviteLink(invitation);
         await loadFamily();
-        showFeedback({
-          type: 'success',
-          title: 'Invitación lista',
-          description: 'Ya podés compartir el QR o el link.',
-          lottieSlot: 'invite_created',
-        });
+        return invitation;
       }
       return null;
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'No pudimos crear la invitación.';
       return msg;
     }
-  }, [householdId, loadFamily, showFeedback]);
+  }, [householdId, loadFamily]);
 
   const handleCopyInviteLink = useCallback(async () => {
     if (!familyData?.invite_links) return;
 
-    const activeLink = familyData.invite_links.find(
-      (link) => !link.revoked_at && !link.expires_at,
-    );
+    const activeLink = familyData.invite_links.find(isInviteLinkActive);
 
     if (activeLink) {
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || process.env.EXPO_PUBLIC_APP_URL || 'https://homeplus.app';
-      const inviteUrl = `${baseUrl}/join?token=${activeLink.token}`;
+      const normalized = normalizeInviteLink(activeLink);
+      const inviteUrl = normalized.displayValue ?? (normalized.token ? buildInviteDeepLink(normalized.token) : null);
       
-      Alert.alert('Link de invitación', inviteUrl);
+      if (inviteUrl) Alert.alert('Link de invitación', inviteUrl);
     }
   }, [familyData?.invite_links]);
 
   const handleRevokeInviteLink = useCallback(async () => {
-    if (!householdId || !familyData?.invite_links) return;
+    if (!householdId || !familyData?.invite_links) return 'No pudimos encontrar el hogar activo.';
 
-    const activeLink = familyData.invite_links.find(
-      (link) => !link.revoked_at && !link.expires_at,
-    );
+    const activeLink = familyData.invite_links.find(isInviteLinkActive);
 
     if (activeLink) {
       try {
         const { error } = await revokeInvitation(householdId, activeLink.id);
-        if (error) {
-          Alert.alert('Error', error);
-        } else {
-          showFeedback({
-            type: 'success',
-            title: 'Invitación revocada',
-            description: 'El link dejó de dar acceso al hogar.',
-            lottieSlot: 'invite_revoked',
-          });
-        }
+        if (error) return error;
+        showFeedback({
+          type: 'success',
+          message: 'Link desactivado',
+          detail: 'El link dejó de dar acceso al hogar.',
+          lottieSlot: 'link_revoked',
+        });
         await loadFamily();
+        setLocalInviteLink(null);
+        return null;
       } catch (error) {
-        const msg = error instanceof Error ? error.message : 'No pudimos revocar el link.';
-        Alert.alert('Error', msg);
+        return error instanceof Error ? error.message : 'No pudimos revocar el link.';
       }
     }
+
+    return 'No encontramos un link activo para desactivar.';
   }, [householdId, familyData?.invite_links, loadFamily, showFeedback]);
 
   const handleApproveJoin = useCallback(async (membershipId: string, role: PendingRole) => {
     if (!householdId) return;
 
     if (!accessToken) {
-      Alert.alert('Error', 'Tu sesión expiró. Inicia sesión nuevamente.');
+      showErrorFeedback('Tu sesión expiró. Inicia sesión nuevamente.');
       return;
     }
 
@@ -210,22 +221,22 @@ export const FamilyScreen = () => {
       await approveJoinRequest(accessToken, householdId, membershipId, role);
       showFeedback({
         type: 'success',
-        title: 'Solicitud aprobada',
-        description: 'La persona ya puede participar del hogar.',
+        message: 'Solicitud aprobada',
+        detail: 'La persona ya puede participar del hogar.',
         lottieSlot: 'request_approved',
       });
       await loadFamily();
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'No pudimos aprobar la solicitud.';
-      Alert.alert('Error', msg);
+      showErrorFeedback(msg);
     }
-  }, [accessToken, householdId, loadFamily, showFeedback]);
+  }, [accessToken, householdId, loadFamily, showFeedback, showErrorFeedback]);
 
   const handleRejectJoin = useCallback(async (membershipId: string) => {
     if (!householdId) return;
 
     if (!accessToken) {
-      Alert.alert('Error', 'Tu sesión expiró. Inicia sesión nuevamente.');
+      showErrorFeedback('Tu sesión expiró. Inicia sesión nuevamente.');
       return;
     }
 
@@ -234,139 +245,122 @@ export const FamilyScreen = () => {
       await rejectJoinRequest(accessToken, householdId, membershipId);
       showFeedback({
         type: 'info',
-        title: 'Solicitud rechazada',
-        description: 'La solicitud quedó cerrada.',
+        message: 'Solicitud rechazada',
+        detail: 'La solicitud quedó cerrada.',
         lottieSlot: 'request_rejected',
       });
       await loadFamily();
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'No pudimos rechazar la solicitud.';
-      Alert.alert('Error', msg);
+      showErrorFeedback(msg);
     }
-  }, [accessToken, householdId, loadFamily, showFeedback]);
+  }, [accessToken, householdId, loadFamily, showFeedback, showErrorFeedback]);
 
   const handleApproveRoleRequest = useCallback(async (requestId: string) => {
     if (!householdId) return;
     if (!accessToken) {
-      Alert.alert('Error', 'Tu sesión expiró. Inicia sesión nuevamente.');
+      showErrorFeedback('Tu sesión expiró. Inicia sesión nuevamente.');
       return;
     }
 
     try {
       const { error: actionError } = await approveRoleChange(accessToken, householdId, requestId);
       if (actionError) {
-        Alert.alert('Error', actionError);
+        showErrorFeedback(actionError);
         return;
       }
       showFeedback({
         type: 'success',
-        title: 'Cambio aprobado',
-        description: 'El rol fue actualizado en el hogar.',
+        message: 'Cambio aprobado',
+        detail: 'El rol fue actualizado en el hogar.',
         lottieSlot: 'role_updated',
       });
       await loadFamily();
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'No pudimos aprobar la solicitud.';
-      Alert.alert('Error', msg);
+      showErrorFeedback(msg);
     }
-  }, [accessToken, householdId, loadFamily, showFeedback]);
+  }, [accessToken, householdId, loadFamily, showFeedback, showErrorFeedback]);
 
   const handleRejectRoleRequest = useCallback(async (requestId: string) => {
     if (!householdId) return;
     if (!accessToken) {
-      Alert.alert('Error', 'Tu sesión expiró. Inicia sesión nuevamente.');
+      showErrorFeedback('Tu sesión expiró. Inicia sesión nuevamente.');
       return;
     }
 
     try {
       const { error: actionError } = await rejectRoleChange(accessToken, householdId, requestId);
       if (actionError) {
-        Alert.alert('Error', actionError);
+        showErrorFeedback(actionError);
         return;
       }
       showFeedback({
         type: 'info',
-        title: 'Cambio rechazado',
-        description: 'La solicitud de rol quedó cerrada.',
+        message: 'Cambio rechazado',
+        detail: 'La solicitud de rol quedó cerrada.',
         lottieSlot: 'role_rejected',
       });
       await loadFamily();
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'No pudimos rechazar la solicitud.';
-      Alert.alert('Error', msg);
+      showErrorFeedback(msg);
     }
-  }, [accessToken, householdId, loadFamily, showFeedback]);
+  }, [accessToken, householdId, loadFamily, showFeedback, showErrorFeedback]);
 
   const handleCancelRoleRequest = useCallback(async (requestId: string) => {
     if (!householdId) return;
     if (!accessToken) {
-      Alert.alert('Error', 'Tu sesión expiró. Inicia sesión nuevamente.');
+      showErrorFeedback('Tu sesión expiró. Inicia sesión nuevamente.');
       return;
     }
 
     try {
       const { error: actionError } = await cancelMyRoleRequest(accessToken, householdId, requestId);
       if (actionError) {
-        Alert.alert('Error', actionError);
+        showErrorFeedback(actionError);
         return;
       }
       showFeedback({
         type: 'info',
-        title: 'Solicitud cancelada',
-        description: 'El pedido de cambio ya no está pendiente.',
+        message: 'Solicitud cancelada',
+        detail: 'El pedido de cambio ya no está pendiente.',
         lottieSlot: 'role_request_cancelled',
       });
       await loadFamily();
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'No pudimos cancelar la solicitud.';
-      Alert.alert('Error', msg);
+      showErrorFeedback(msg);
     }
-  }, [accessToken, householdId, loadFamily, showFeedback]);
+  }, [accessToken, householdId, loadFamily, showFeedback, showErrorFeedback]);
 
   const handleRemoveMember = useCallback(async () => {
-    if (!householdId || !selectedMember) return;
+    if (!householdId || !selectedMember) return 'No pudimos encontrar el hogar activo.';
     if (!accessToken) {
-      Alert.alert('Error', 'Tu sesión expiró. Inicia sesión nuevamente.');
-      return;
+      return 'Tu sesión expiró. Inicia sesión nuevamente.';
     }
 
-    Alert.alert(
-      'Quitar miembro',
-      `${selectedMember.display_name} dejará de tener acceso activo a este hogar.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Quitar',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error: actionError } = await finalizeMember(accessToken, householdId, selectedMember.membership_id);
-              if (actionError) {
-                Alert.alert('Error', actionError);
-                return;
-              }
-              showFeedback({
-                type: 'success',
-                title: 'Miembro quitado',
-                description: `${selectedMember.display_name} ya no tiene acceso a este hogar.`,
-                lottieSlot: 'member_removed',
-              });
-              await loadFamily();
-            } catch (error) {
-              const msg = error instanceof Error ? error.message : 'No pudimos quitar el miembro.';
-              Alert.alert('Error', msg);
-            }
-          },
-        },
-      ],
-    );
+    try {
+      const { error: actionError } = await finalizeMember(accessToken, householdId, selectedMember.membership_id);
+      if (actionError) return actionError;
+
+      showFeedback({
+        type: 'success',
+        message: 'Miembro quitado del hogar',
+        detail: `${selectedMember.display_name} ya no tiene acceso a este hogar.`,
+        lottieSlot: 'member_removed',
+      });
+      await loadFamily();
+      return null;
+    } catch (error) {
+      return error instanceof Error ? error.message : 'No pudimos quitar el miembro.';
+    }
   }, [accessToken, householdId, selectedMember, loadFamily, showFeedback]);
 
   const handleChangeMemberRole = useCallback(async (newRole: string) => {
-    if (!householdId || !selectedMember) return;
+    if (!householdId || !selectedMember) return 'No pudimos encontrar el hogar activo.';
     if (!accessToken) {
-      Alert.alert('Error', 'Tu sesión expiró. Inicia sesión nuevamente.');
-      return;
+      return 'Tu sesión expiró. Inicia sesión nuevamente.';
     }
 
     try {
@@ -377,28 +371,26 @@ export const FamilyScreen = () => {
         newRole as 'coordinator' | 'adult' | 'adolescent' | 'child' | 'senior' | 'guest',
       );
       if (actionError) {
-        Alert.alert('Error', actionError);
-        return;
+        return actionError;
       }
-      const roleLabel = ROLE_LABELS[newRole as Role] ?? newRole;
+      const roleLabel = getRoleLabel(newRole as Role);
       showFeedback({
         type: 'success',
-        title: 'Rol actualizado',
-        description: `${selectedMember.display_name} ahora es ${roleLabel}.`,
+        message: 'Rol actualizado',
+        detail: `${selectedMember.display_name} ahora es ${roleLabel}.`,
         lottieSlot: 'role_updated',
       });
       await loadFamily();
+      return null;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'No pudimos actualizar el rol.';
-      Alert.alert('Error', msg);
+      return error instanceof Error ? error.message : 'No pudimos actualizar el rol.';
     }
   }, [accessToken, householdId, selectedMember, loadFamily, showFeedback]);
 
   const handleRequestRoleChange = useCallback(async (newRole: string) => {
-    if (!householdId) return;
+    if (!householdId) return 'No pudimos encontrar el hogar activo.';
     if (!accessToken) {
-      Alert.alert('Error', 'Tu sesión expiró. Inicia sesión nuevamente.');
-      return;
+      return 'Tu sesión expiró. Inicia sesión nuevamente.';
     }
 
     try {
@@ -408,30 +400,28 @@ export const FamilyScreen = () => {
         newRole as 'coordinator' | 'adult' | 'adolescent' | 'child' | 'senior' | 'guest',
       );
       if (actionError) {
-        Alert.alert('Error', actionError);
-        return;
+        return actionError;
       }
       showFeedback({
         type: 'success',
-        title: 'Solicitud enviada',
-        description: 'El pedido de cambio de rol quedó pendiente.',
+        message: 'Solicitud enviada',
+        detail: 'El pedido de cambio de rol quedó pendiente.',
         lottieSlot: 'role_updated',
       });
       await loadFamily();
+      return null;
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'No pudimos enviar la solicitud.';
-      Alert.alert('Error', msg);
+      return error instanceof Error ? error.message : 'No pudimos enviar la solicitud.';
     }
   }, [accessToken, householdId, loadFamily, showFeedback]);
 
   const currentMember = familyData?.current_member;
   const hasPermissions = currentMember?.can_manage_members || currentMember?.can_change_roles;
 
-  const activeInviteLink = familyData?.invite_links?.find(
-    (link) => !link.revoked_at && !link.expires_at,
-  );
-  const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || process.env.EXPO_PUBLIC_APP_URL || 'https://homeplus.app';
-  const inviteUrl = activeInviteLink ? `${baseUrl}/join?token=${activeInviteLink.token}` : null;
+  const activeInviteLink = familyData?.invite_links?.find(isInviteLinkActive) ?? null;
+  const effectiveInviteLink = activeInviteLink ?? localInviteLink;
+  const normalizedInvite = normalizeInviteLink(effectiveInviteLink);
+  const inviteUrl = normalizedInvite.url ?? null;
 
   return (
     <AppScreen scroll bottomInset="tab" background="base" contentContainerStyle={styles.content}>
@@ -473,15 +463,16 @@ export const FamilyScreen = () => {
               onRejectRoleRequest={handleRejectRoleRequest}
               onCancelRoleRequest={handleCancelRoleRequest}
               onCopyInviteLink={handleCopyInviteLink}
-              onRevokeInviteLink={hasPermissions ? handleRevokeInviteLink : undefined}
+              onRevokeInviteLink={hasPermissions ? async () => { await handleRevokeInviteLink(); } : undefined}
               onCreateInviteLink={handleInvitePress}
             />
             <InviteLinkSheet
               visible={inviteLinkVisible}
               onClose={() => setInviteLinkVisible(false)}
               inviteUrl={inviteUrl}
-              inviteToken={activeInviteLink?.token ?? null}
-              hasActiveLink={Boolean(activeInviteLink)}
+              inviteToken={normalizedInvite.token ?? null}
+              inviteLink={effectiveInviteLink}
+              hasActiveLink={Boolean(effectiveInviteLink)}
               onCreateInvite={handleCreateInviteFromSheet}
               onRevokeInviteLink={hasPermissions ? handleRevokeInviteLink : undefined}
               canRevoke={hasPermissions}
@@ -504,11 +495,11 @@ export const FamilyScreen = () => {
         onRequestRoleChange={handleRequestRoleChange}
       />
 
-      <FamilyActionFeedback
+      <FamilySnackbar
         visible={Boolean(feedback)}
         type={feedback?.type ?? 'success'}
-        title={feedback?.title ?? ''}
-        description={feedback?.description}
+        message={feedback?.message ?? ''}
+        detail={feedback?.detail}
         lottieSlot={feedback?.lottieSlot}
         onDismiss={() => setFeedback(null)}
       />
