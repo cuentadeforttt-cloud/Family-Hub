@@ -16,7 +16,7 @@ import { plannerStyles as S } from './plannerShared';
 
 type PlannerInternalTab = 'tasks' | 'calendar' | 'goals';
 type PlannerSheet =
-  | { type: 'task'; mode: 'create' | 'edit'; id?: string }
+  | { type: 'task'; mode: 'create' | 'edit'; id?: string; initialDueDate?: string }
   | {
       type: 'event';
       mode: 'create' | 'edit';
@@ -244,6 +244,7 @@ export function PlannerScreen() {
               )
             }
             onEditTask={(id) => setSheet({ type: 'task', mode: 'edit', id })}
+            onCreateTask={(initialDueDate) => setSheet({ type: 'task', mode: 'create', initialDueDate })}
             onShowToast={(msg) => {
               setToast(msg);
               setTimeout(() => setToast(null), 2200);
@@ -352,6 +353,7 @@ export function PlannerScreen() {
               <TaskForm
                 mode={sheet.mode}
                 taskId={sheet.id}
+                initialDueDate={sheet.initialDueDate}
                 embedded
                 onClose={() => setSheet(null)}
                 onSaved={completeSheetMutation}

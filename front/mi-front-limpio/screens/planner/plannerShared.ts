@@ -6,7 +6,7 @@ export const priorityLabels: Record<PlannerTaskPriority, string> = {
   low: 'Baja',
   medium: 'Normal',
   high: 'Alta',
-  critical: 'Crítica',
+  critical: 'Urgente',
 };
 
 export const statusLabels: Record<PlannerTaskStatus, string> = {

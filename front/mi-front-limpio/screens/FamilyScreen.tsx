@@ -71,15 +71,6 @@ export const FamilyScreen = () => {
   }, [showFeedback]);
 
   const loadFamily = useCallback(async () => {
-    if (__DEV__) {
-      console.log('[FamilyScreen] load params', {
-        hasToken: Boolean(accessToken),
-        householdId,
-        currentHouseholdId: currentHousehold?.id,
-        authMeActiveHouseholdId,
-      });
-    }
-
     if (!householdId) {
       setFamilyData(null);
       setError(null);
@@ -98,14 +89,6 @@ export const FamilyScreen = () => {
     setError(null);
 
     const { data, error: fetchError } = await getHouseholdFamily(accessToken, householdId);
-
-    if (__DEV__) {
-      console.log('[FamilyScreen] family response', {
-        hasData: Boolean(data),
-        error: fetchError,
-        membersCount: data?.members?.length,
-      });
-    }
 
     if (fetchError) {
       setError(fetchError);
@@ -145,15 +128,6 @@ export const FamilyScreen = () => {
 
     try {
       const { invitation, error: inviteError } = await createInvitation(householdId);
-
-      if (__DEV__) {
-        const normalized = normalizeInviteLink(invitation);
-        console.log('[FamilyScreen] invite created response', {
-          hasToken: Boolean(normalized.token),
-          hasUrl: Boolean(normalized.url),
-          keys: invitation ? Object.keys(invitation) : [],
-        });
-      }
 
       if (inviteError) {
         return inviteError;

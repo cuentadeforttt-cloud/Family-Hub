@@ -129,9 +129,7 @@ export const ProfileScreen = () => {
     try {
       const response = await getUserHouseholds(session.access_token);
       const rawHouseholds = response.households ?? [];
-      console.log('[H042.3I][ProfileHomes] raw', rawHouseholds)
       const normalized = normalizeUserHouseholds(rawHouseholds, activeHouseholdId);
-      console.log('[H042.3I][ProfileHomes] normalized', normalized)
       setHouseholds(normalized);
     } catch (error) {
       console.error('[ProfileScreen] Error cargando hogares:', error);

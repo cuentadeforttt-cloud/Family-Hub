@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, SafeAreaView, StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, Animated, StyleSheet, Text } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppLogo } from '../components/AppLogo';
 
 export const AuthLoadingScreen = () => {

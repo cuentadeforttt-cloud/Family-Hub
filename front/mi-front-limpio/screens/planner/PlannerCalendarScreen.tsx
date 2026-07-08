@@ -34,6 +34,7 @@ type Props = {
     },
   ) => void;
   onEditTask?: (taskId: string) => void;
+  onCreateTask?: (initialDueDate: string) => void;
   onShowToast?: (message: string) => void;
 };
 
@@ -52,7 +53,7 @@ const moveDate = (date: Date, view: PlannerCalendarView, direction: -1 | 1) => {
   return addMonths(date, direction);
 };
 
-export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, onEditEvent, onEditTask, onShowToast }: Props) {
+export function PlannerCalendarScreen({ refreshKey, onChanged, onCreateEvent, onEditEvent, onEditTask, onCreateTask, onShowToast }: Props) {
   const { session, loading: authLoading } = useAuth();
   const { members } = useHousehold();
   const { plannerChangedAt, markPlannerChanged } = useAppRefresh();
@@ -150,6 +151,10 @@ const selectedDateItems = useMemo(
   const viewLabel = viewLabels[view];
   const weekDays = useMemo(() => getWeekDays(selectedDate), [selectedDate]);
 
+  const handleCreateTask = () => {
+    onCreateTask?.(selectedDateKey);
+  };
+
   const handleEditEvent = (item: PlannerCalendarEventItem) => {
     const context =
       item.is_recurring_occurrence && !item.is_override
@@ -174,9 +179,14 @@ const selectedDateItems = useMemo(
             {view === 'day' ? 'Ves un día a la vez' : view === 'week' ? 'Ves la semana completa' : 'Ves todo el mes'}
           </Text>
         </View>
-        <TouchableOpacity style={S.primaryBtn} onPress={onCreateEvent}>
-          <Text style={S.btnText}>Nuevo</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: spacing[2] }}>
+          <TouchableOpacity style={S.secondaryBtn} onPress={handleCreateTask}>
+            <Text style={S.secondaryText}>Crear tarea</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={S.primaryBtn} onPress={onCreateEvent}>
+            <Text style={S.btnText}>Nuevo</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }} contentContainerStyle={{ paddingRight: spacing[4] }}>
@@ -307,9 +317,14 @@ const selectedDateItems = useMemo(
               ? 'No hay tareas ni eventos para estos días.'
               : 'Los eventos y tareas con fecha van a aparecer en el calendario.'}
           </Text>
-          <TouchableOpacity style={[S.primaryBtn, { marginTop: 8 }]} onPress={onCreateEvent}>
-            <Text style={S.btnText}>Crear evento</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: spacing[2] }}>
+            <TouchableOpacity style={[S.primaryBtn, { marginTop: 8 }]} onPress={onCreateEvent}>
+              <Text style={S.btnText}>Crear evento</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[S.secondaryBtn, { marginTop: 8 }]} onPress={handleCreateTask}>
+              <Text style={S.secondaryText}>Crear tarea</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : null}
 
@@ -321,6 +336,14 @@ const selectedDateItems = useMemo(
           <Text style={S.calendarEmptyText}>
             No hay tareas ni eventos para esta fecha.
           </Text>
+          <View style={{ flexDirection: 'row', gap: spacing[2] }}>
+            <TouchableOpacity style={[S.primaryBtn, { marginTop: 8 }]} onPress={onCreateEvent}>
+              <Text style={S.btnText}>Crear evento</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[S.secondaryBtn, { marginTop: 8 }]} onPress={handleCreateTask}>
+              <Text style={S.secondaryText}>Crear tarea</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : null}
 

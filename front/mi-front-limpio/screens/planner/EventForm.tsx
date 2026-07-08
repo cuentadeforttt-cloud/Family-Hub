@@ -251,21 +251,6 @@ export function EventForm({
       recurrence,
     };
 
-    if (__DEV__) {
-      console.log('[EventForm submit]', {
-        mode,
-        hasAccessToken: Boolean(accessToken),
-        authLoading,
-        eventId,
-        isGeneratedRecurringOccurrence,
-        editScope,
-        baseEventId,
-        occurrenceStartsAt,
-        occurrenceEndsAt,
-        payload,
-      });
-    }
-
     setSaving(true);
     setError(null);
 
@@ -323,15 +308,6 @@ if (isGeneratedRecurringOccurrence) {
       const message = err instanceof ApiError ? err.message : 'No pudimos guardar el evento.';
       setError(message);
       Alert.alert('Planner', message);
-
-      if (__DEV__ && err instanceof ApiError) {
-        console.error('[EventForm submit error]', {
-          message: err.message,
-          status: err.status,
-          code: err.code,
-          debugMessage: err.debugMessage,
-        });
-      }
     } finally {
       setSaving(false);
     }

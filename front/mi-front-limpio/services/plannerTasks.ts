@@ -54,7 +54,7 @@ export type CreatePlannerTaskPayload = {
   title: string;
   description?: string;
   priority?: PlannerTaskPriority;
-  template_key?: PlannerTaskTemplateKey;
+  template_key?: PlannerTaskTemplateKey | null;
   category?: string;
   due_date?: string;
   due_time?: string;

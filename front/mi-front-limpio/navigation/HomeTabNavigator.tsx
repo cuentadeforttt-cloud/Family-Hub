@@ -26,6 +26,8 @@ import { colors, spacing } from '../constants/theme';
 const Tab = createBottomTabNavigator<HomeTabParamList>();
 const PlannerStack = createNativeStackNavigator<PlannerStackParamList>();
 
+const AddTabPlaceholder = () => null;
+
 const TabIcon = ({
   iconKey,
   label,
@@ -211,7 +213,7 @@ export function HomeTabNavigator() {
 
         <Tab.Screen
           name="AddTab"
-          component={() => null}
+          component={AddTabPlaceholder}
           options={{
             tabBarButton: () => <CenterTabButton onPress={handleQuickActionPress} />,
           }}

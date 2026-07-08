@@ -336,23 +336,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const initialUrl = await Linking.getInitialURL();
 
         if (initialUrl) {
-          console.log('[AuthContext] Initial URL:', initialUrl);
           const { path, accessToken, refreshToken, code, type, errorCode, errorDescription, hasAuthParams } =
             parseAuthUrl(initialUrl);
-
-          console.log('[AuthContext] Parsed path:', path, 'hasAuthParams:', hasAuthParams, 'code:', code);
 
           if (hasAuthParams) {
             if (errorCode || errorDescription) {
               console.warn('[AuthContext] OAuth error:', errorDescription);
             } else if (code) {
-              console.log('[AuthContext] Exchanging OAuth code for session');
               const { error } = await supabase.auth.exchangeCodeForSession(code);
               if (error) {
                 console.warn('[AuthContext] Code exchange error:', error.message);
               }
             } else if (accessToken && refreshToken) {
-              console.log('[AuthContext] Setting session from URL tokens');
               const { error } = await supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken,
@@ -450,9 +445,6 @@ const signIn = useCallback(async ({ email, password }: SignInParams): Promise<Au
         },
       },
     });
-
-    console.log('[GoogleOAuth] data.url', data?.url);
-    console.log('[GoogleOAuth] typeof data.url', typeof data?.url);
 
     if (error) {
       return {

@@ -59,6 +59,7 @@ export function QuickActionSheet({ visible, onRequestClose }: QuickActionSheetPr
   }, [navigation, authMe?.active_household?.id, onRequestClose]);
 
   const canInvite = isCoordinator || currentRole === 'adulto';
+  const visibleActionCount = (canInvite ? 1 : 0) + 2; // Nueva tarea + Nuevo evento siempre visibles
 
   return (
     <Modal
@@ -144,7 +145,7 @@ export function QuickActionSheet({ visible, onRequestClose }: QuickActionSheetPr
               <HomePlusIcon name="chevron-forward" size={20} color={colors.text.tertiary} />
             </Pressable>
 
-            {canInvite && (
+            {canInvite ? (
               <Pressable
                 onPress={openInvitePeople}
                 style={({ pressed }) => [
@@ -154,9 +155,9 @@ export function QuickActionSheet({ visible, onRequestClose }: QuickActionSheetPr
                 accessibilityRole="button"
                 accessibilityLabel="Invitar persona"
               >
-<View style={[styles.actionIcon, { backgroundColor: colors.info.soft }]}>
-                <HomePlusIcon name="person-add-outline" size={22} color={colors.info.text} />
-              </View>
+                <View style={[styles.actionIcon, { backgroundColor: colors.info.soft }]}>
+                  <HomePlusIcon name="person-add-outline" size={22} color={colors.info.text} />
+                </View>
                 <View style={styles.actionInfo}>
                   <AppText variant="body" weight="700">
                     Invitar persona
@@ -167,7 +168,15 @@ export function QuickActionSheet({ visible, onRequestClose }: QuickActionSheetPr
                 </View>
                 <HomePlusIcon name="chevron-forward" size={20} color={colors.text.tertiary} />
               </Pressable>
-            )}
+            ) : null}
+
+            {visibleActionCount === 0 ? (
+              <View style={[styles.actionRow, { padding: spacing[3], backgroundColor: 'transparent', borderWidth: 0, justifyContent: 'center' }]}>
+                <AppText variant="caption" tone="tertiary">
+                  No hay acciones rápidas disponibles por ahora.
+                </AppText>
+              </View>
+            ) : null}
           </ScrollView>
         </View>
       </Pressable>

@@ -2,12 +2,12 @@ import React, { useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../navigation/types';
 import { AppLogo } from '../components/AppLogo';

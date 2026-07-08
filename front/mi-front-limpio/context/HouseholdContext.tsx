@@ -109,10 +109,6 @@ const loadMembers = useCallback(async () => {
       .order('joined_at', { ascending: true });
 
     if (error) {
-      console.warn(
-        '[HouseholdContext] Error cargando miembros desde household_people_public, usando fallback:',
-        error,
-      );
       setMembers(fallbackMembers);
       setMembersError('No pudimos cargar los miembros del hogar.');
       return;
@@ -132,12 +128,6 @@ const loadMembers = useCallback(async () => {
           avatar_url: member.avatar_url,
         },
       }));
-
-    if (mappedMembers.length === 0) {
-      console.warn(
-        '[HouseholdContext] household_people_public devolvió 0 miembros, usando fallback con solo el usuario actual.',
-      );
-    }
 
     setMembers(mappedMembers.length > 0 ? mappedMembers : fallbackMembers);
     setMembersError(null);
